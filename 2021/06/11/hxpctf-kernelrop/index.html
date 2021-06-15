@@ -16,7 +16,7 @@
 <meta property="og:description" content="Walkthrough Solution of kernel-rop from hxpctf 2020">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2021-06-11T04:00:00.000Z">
-<meta property="article:modified_time" content="2021-06-11T07:28:46.396Z">
+<meta property="article:modified_time" content="2021-06-15T01:43:42.767Z">
 <meta property="article:author" content="cp">
 <meta property="article:tag" content="pwn">
 <meta property="article:tag" content="ctf">
@@ -196,6 +196,9 @@
 <p>To commit the changes we have to compress the filesystem back.<br>I wrote a shell script to do so.</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">cd</span> initramfs;</span><br><span class="line">find . | cpio -o --format=newc &gt; ../initramfs.cpio;</span><br><span class="line"><span class="built_in">cd</span> ..;</span><br><span class="line">gzip initramfs.cpio;</span><br></pre></td></tr></table></figure>
 <p>Now if we launch <code>./run.sh</code>, we will get a root shell.</p>
+<p>Finally, let’s extract the vm image and run <code>ROPgadget</code> on it to obviously find rop gadgets.<br>The process will take around 15 minutes because the image is huge.<br><a target="_blank" rel="noopener" href="https://github.com/torvalds/linux/blob/master/scripts/extract-vmlinux">extract-vmlinux.sh</a></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ ./extract-image.sh ./vmlinuz &gt; vmlinux</span><br><span class="line">$ ROPgadget --binary ./vmlinux &gt; gadgets.txt</span><br></pre></td></tr></table></figure>
+
 <h2 id="Reversing"><a href="#Reversing" class="headerlink" title="Reversing"></a>Reversing</h2><p>There are 2 main functions, <code>hackme_read</code> and <code>hackme_write</code>.</p>
 <h3 id="hackme-read"><a href="#hackme-read" class="headerlink" title="hackme_read"></a>hackme_read</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">ssize_t</span> __fastcall <span class="title">hackme_read</span><span class="params">(file *f, <span class="keyword">char</span> *data, <span class="keyword">size_t</span> size, <span class="keyword">loff_t</span> *off)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  <span class="keyword">unsigned</span> __int64 v4; <span class="comment">// rdx</span></span><br><span class="line">  <span class="keyword">unsigned</span> __int64 v5; <span class="comment">// rbx</span></span><br><span class="line">  <span class="keyword">bool</span> v6; <span class="comment">// zf</span></span><br><span class="line">  <span class="keyword">ssize_t</span> result; <span class="comment">// rax</span></span><br><span class="line">  <span class="keyword">int</span> tmp[<span class="number">32</span>]; <span class="comment">// [rsp+0h] [rbp-A0h] BYREF</span></span><br><span class="line">  <span class="keyword">unsigned</span> __int64 v9; <span class="comment">// [rsp+80h] [rbp-20h]</span></span><br><span class="line"></span><br><span class="line">  _fentry__();</span><br><span class="line">  v5 = v4;</span><br><span class="line">  v9 = __readgsqword(<span class="number">0x28</span>u);</span><br><span class="line">  _memcpy(hackme_buf, tmp);</span><br><span class="line">  <span class="keyword">if</span> ( v5 &gt; <span class="number">0x1000</span> )</span><br><span class="line">  &#123;</span><br><span class="line">    _warn_printk(<span class="string">&quot;Buffer overflow detected (%d &lt; %lu)!\n&quot;</span>, <span class="number">4096LL</span>, v5);</span><br><span class="line">    BUG();</span><br><span class="line">  &#125;</span><br><span class="line">  _check_object_size(hackme_buf, v5, <span class="number">1LL</span>);</span><br><span class="line">  v6 = copy_to_user(data, hackme_buf, v5) == <span class="number">0</span>;</span><br><span class="line">  result = <span class="number">-14LL</span>;</span><br><span class="line">  <span class="keyword">if</span> ( v6 )</span><br><span class="line">    result = v5;</span><br><span class="line">  <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
@@ -436,14 +439,6 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
           <ul class="article-tag-list" q-show="showTags">
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
-              </li>
-             
-              <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color4">cve</a>
-              </li>
-             
-              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">pwn</a>
               </li>
              
@@ -453,6 +448,14 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color2">kernel</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">cve</a>
               </li>
              
               <li class="article-tag-list-item">
