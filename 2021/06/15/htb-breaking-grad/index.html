@@ -21,7 +21,7 @@
 <meta property="og:image" content="http://example.com/2021/06/15/htb-breaking-grad/exp1.png">
 <meta property="og:image" content="http://example.com/2021/06/15/htb-breaking-grad/exp2.png">
 <meta property="article:published_time" content="2021-06-15T04:00:00.000Z">
-<meta property="article:modified_time" content="2021-06-15T04:15:00.918Z">
+<meta property="article:modified_time" content="2021-06-15T04:25:57.965Z">
 <meta property="article:author" content="cp">
 <meta property="article:tag" content="web">
 <meta property="article:tag" content="prototype pollution">
@@ -200,8 +200,8 @@
 <p>Now we can use firefox to play with this function.</p>
 <img src="/2021/06/15/htb-breaking-grad/poc1.png" class="" title="poc1">
 
-<p>The empty object indeed got all the properties of the new source object, but it also has an inbuilt object <code>__proto__</code>. This object is the prototype of the constructor of the object. So for the empty object <code>&#123;&#125;</code>, its constructor its the <code>Object</code> function. If we append a property to this <code>Object</code> constructor’s prototype, all new objects created will have this property inherited.</p>
-<p>Even though the keyword <code>__proto__</code> is filtered, <code>constructor.prototype</code> will refer to the same thing.</p>
+<p>The empty object indeed got all the properties of the new source object, but it also has an inbuilt property <code>__proto__</code>. This property refers to the prototype of the constructor of the object. For the empty object <code>&#123;&#125;</code>, its constructor is the <code>Object</code> function. If we append a property to <code>Object</code>‘s prototype, all new objects created will have this property inherited.</p>
+<p>Even though the word <code>__proto__</code> is filtered, <code>constructor.prototype</code> will refer to the same thing.</p>
 <img src="/2021/06/15/htb-breaking-grad/poc2.png" class="" title="poc2">
 <p>Before the pollution, object b does not have the property <code>pollutekey:pollutevalue</code>. After the pollution, not only does object b magically inherit this property, object c that is newly created also inherits it.</p>
 <h2 id="Exploitation"><a href="#Exploitation" class="headerlink" title="Exploitation"></a>Exploitation</h2><p>The debug function seems like it can execute code, so that can be a good place to gain code execution.</p>
