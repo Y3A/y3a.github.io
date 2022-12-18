@@ -6,14 +6,20 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Archives: 2022/1 | cppblog</title>
+  <title>Symbolic Execution 1 | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/archives/2022/01/index.html">
+  <meta name="description" content="High level overview of Symbolic Execution.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Symbolic Execution 1">
+<meta property="og:url" content="http://example.com/2022/12/18/symex1/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="High level overview of Symbolic Execution.">
 <meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-12-18T08:00:00.000Z">
+<meta property="article:modified_time" content="2022-12-18T14:02:02.735Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="reads">
+<meta property="article:tag" content="symex">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
@@ -142,110 +148,278 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-  
+            <article id="post-symex1" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
     
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2022" class="archive-year">2022</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/01/26/cve-2021-4034/" class="archive-article-date">
-  	<time datetime="2022-01-26T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-01-26</time>
-</a>
-        </div>
-    	 
+      <header class="article-header">
+        
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/01/26/cve-2021-4034/">CVE-2021-4034 exploit and analysis</a>
+    <h1 class="article-title" itemprop="name">
+      Symbolic Execution 1
     </h1>
   
 
-        <div class="article-info info-on-right">
-          
+        
+        <a href="/2022/12/18/symex1/" class="archive-article-date">
+  	<time datetime="2022-12-18T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-18</time>
+</a>
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>High level overview of Symbolic Execution.</p>
+<span id="more"></span>
+
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p><code>Symbolic Execution</code>, a program analysis technique first discussed in 1976, has gained traction among security researchers in the past 5 years.<br>As we have discussed in the previous post, this is mostly used to aid fuzzers towards a certain goal, usually code coverage.</p>
+<p>In practise, Dynamic Symbolic Execution, also known as <code>Concolic Execution</code> is more prevalent.</p>
+<p>This post serves to discuss the high level details of Symbolic/Concolic Execution without going into implementation details, which will be saved for the next post.</p>
+<h2 id="Basic-Symbolic-Execution-Theory"><a href="#Basic-Symbolic-Execution-Theory" class="headerlink" title="Basic Symbolic Execution Theory"></a>Basic Symbolic Execution Theory</h2><p>What are symbolic values?</p>
+<p>Symbolic values are unique values that each represents a set of concrete values(e.g the set of 32-bit integers).</p>
+<p>By supplying a symbolic value as input, each value can generate the results equivalent to all the concrete values in that set.</p>
+<p>Upon reaching branching statements, we can form an equation with the symbolic values.</p>
+<p>For example:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">input integers x, y</span><br><span class="line"></span><br><span class="line">t = <span class="number">0</span></span><br><span class="line"><span class="keyword">if</span> (x &gt; y)</span><br><span class="line">  t = x</span><br><span class="line"><span class="keyword">else</span></span><br><span class="line">  t = y</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (t &lt; x)</span><br><span class="line">  crash</span><br></pre></td></tr></table></figure>
+
+<p>Instead of using concrete values, we can use symbols <code>x0</code> and <code>y0</code> as input to variables x and y</p>
+<p>Then, let the value of t after the if statament be <code>t0</code>.</p>
+<p>Up to line 9, <code>t0</code> can have 2 values:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">t0 &#x3D; x0 if x0 &gt; y0</span><br><span class="line">t0 &#x3D; y0 if x0 &lt;&#x3D; y0</span><br></pre></td></tr></table></figure>
+
+<p><code>x0 &gt; y0</code> and <code>x0 &lt;= y0</code> are called path conditions.<br>A path condition must be satisfied for that path to be taken.</p>
+<p>In line 9, two more path conditions are collected for two more paths.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">t0 &lt; x0</span><br><span class="line">t0 &gt;&#x3D; x0</span><br></pre></td></tr></table></figure>
+
+<p>To trigger a crash, we need the first path condition to be true.</p>
+<p>Now we have 3 equations.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">t0 &#x3D; x0 if x0 &gt; y0</span><br><span class="line">t0 &#x3D; y0 if x0 &lt;&#x3D; y0</span><br><span class="line">t0 &lt; x0</span><br></pre></td></tr></table></figure>
+
+<p>We can feed these equations into a Satisfiability Modulo Theories(SMT) solver to give us the concrete inputs that satisfy this relationship.</p>
+<p>These concrete inputs will trigger a crash.</p>
+<h2 id="SMT-Solver-Theory"><a href="#SMT-Solver-Theory" class="headerlink" title="SMT Solver Theory"></a>SMT Solver Theory</h2><p>Given a logical formula, the SMT solver will either produce satisfying assignments(concrete values) or tell you it’s unsatisfiable.</p>
+<p>In practise, it might also tell you it does not know how to solve it.</p>
+<p>The SMT solver works by having a database of boolean constraints based on your logical formula in Conjunctive Normal Form(CNF) clause.</p>
+<p>For example, the conditions <code>x&gt;5 AND y&lt;5 AND (y&gt;x OR y&gt;2)</code> can be turned into boolean constraint <code>x1 AND x2 AND (x3 OR x4)</code>.</p>
+<p>The solver assumes a state for an unknown at random, then goes through the constraints to propagate that state’s implication on other unknowns.</p>
+<p>For example, if it meets a constraint <code>(x3 OR x4)</code> and x3 is FALSE, we know x4 must be TRUE.</p>
+<p>If all constraints are satisfiable, amazing. Repeat the process and assume a state for another unknown.</p>
+<p>When it reaches an unsatisfiable constraint due to the assumed states, it analyses all current states and adds a new conflict clause to the database so this unsatisfiable situation does not happen again.</p>
+<p>For example as shown above, <code>x3</code> is FALSE and <code>x4</code> is TRUE. Another constraint <code>(x3 OR -x7)</code> is present, and since <code>x3</code> is FALSE, <code>x7</code> must be FALSE also.</p>
+<p>Now imagine in the next round of assumption, we come across the constraint <code>(x6 OR x7)</code> and we assume <code>x6</code> to be FALSE, so <code>x7</code> must be <code>TRUE</code>.</p>
+<p>Now we have a problem, because <code>x7</code> will be both FALSE and TRUE, which is against the rules of boolean algebra.</p>
+<p>In this case, a constraint clause like <code>(x3 AND x6)</code> will be added, to  make sure such a situation is avoided.</p>
+<p>This process is repeated until all constraints are solved, or a halt condition is hit.</p>
+<p>This is the Boolean SAT solver part of the SMT solver.</p>
+<p>If it successfully finds states to solve for all the boolean constraints, it will try to generate concrete values that matches the states.</p>
+<p>For example, if state <code>x1</code> is TRUE, a value of 6 might be generated since 6 &gt; 5 is TRUE.</p>
+<p>This is the theory solver part.</p>
+<h2 id="Challenges-of-Symbolic-Execution"><a href="#Challenges-of-Symbolic-Execution" class="headerlink" title="Challenges of Symbolic Execution"></a>Challenges of Symbolic Execution</h2><h3 id="Path-Explosion"><a href="#Path-Explosion" class="headerlink" title="Path Explosion"></a>Path Explosion</h3><p>In the small example above, we tried to collect all the path conditions and only evaluate satisfiability at the end.</p>
+<p>This is not going to work in real life code. Since the number of paths increase exponentially with number of branches, this approach will lead to “path explosion”, where there are simply too many paths to keep track of and evaluate.</p>
+<p>Instead, we can invoke the SMT solver to check constraints and try to eliminate infeasible paths at every branch.</p>
+<p>A more refined solution is <code>Dynamic Path Pruning</code>(see references section for paper), which can be used to mitigate path explosion.</p>
+<h3 id="Complex-Libraries"><a href="#Complex-Libraries" class="headerlink" title="Complex Libraries"></a>Complex Libraries</h3><p>Although we can mitigate path explosion to a certain extent, real life symbolic execution is still extremely infeasible when complex library functions come into the equation.</p>
+<p>Just imagine the ten thousand lines of code in a modern <code>malloc</code> implementation. Symbolically executing through that everytime is painful and will get nowhere.</p>
+<p>Researchers have proposed to use <code>Abstract Modelling</code> to replace library functions with a simplified model.</p>
+<p>For example, the <code>malloc</code> function might be simplified to returning a pointer in a block of memory and incrementing the pointer.</p>
+<p>Although rudimentary, the effects will be similar on a small scale if <code>free</code> is not taken into account.</p>
+<h3 id="Unsatisfiable-Constraints"><a href="#Unsatisfiable-Constraints" class="headerlink" title="Unsatisfiable Constraints"></a>Unsatisfiable Constraints</h3><p>For paths that are long and involves many conditions, SMT solvers may not be able to solve and find satisfying assignments.</p>
+<p>Other paths may be short but involves computations that are outside the capabilities of the solver, such as non-linear arithmetic or cryptographic functions.</p>
+<p>In this case, <code>Concolic Execution</code> can be useful.</p>
+<h2 id="Concolic-Execution"><a href="#Concolic-Execution" class="headerlink" title="Concolic Execution"></a>Concolic Execution</h2><p>Concolic testing overcomes the problem mentioned above by combining concrete execution (i.e. testing) with<br>symbolic execution.</p>
+<p>Symbolic execution is used to solve for inputs that lead along a certain path.</p>
+<p>However, when a part of the path condition is infeasible for the SMT solver to handle, we substitute values from a test run of the program.</p>
+<p>In many cases, this allows us to make progress towards covering parts of the code that we could not reach through either symbolic execution or randomly generated tests.</p>
+<p>Using the snippet below as example:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">foo</span><span class="params">(<span class="keyword">int</span> v)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> v*v%<span class="number">50</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">baz</span><span class="params">(<span class="keyword">int</span> x, <span class="keyword">int</span> y)</span> </span>&#123;</span><br><span class="line">  z = foo(y);</span><br><span class="line">  <span class="keyword">if</span> (z == x)</span><br><span class="line">    <span class="keyword">if</span> (x &gt; y+<span class="number">10</span>)</span><br><span class="line">      ERROR;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>If we use symbols <code>x0</code> and <code>y0</code> as input:<br>Up to the first statement, symbolic execution gives us<br><code>z = y0 * y0 % 50</code></p>
+<p>The path condition will be <code>x0 = y0 * y0 % 50</code></p>
+<p>This formula is not linear in the input <code>y0</code>, and so it may defeat the SMT solver and we cannot move forward.</p>
+<p>We can address the issue by treating <code>foo</code>, the function that includes nonlinear computation, concretely instead of symbolically.</p>
+<p>We use concrete random value <code>x=100</code>, <code>y=10</code> as input.</p>
+<p>Now we get <code>z = foo(y)</code>, which is <code>z = 0</code>.</p>
+<p>One path condition is <code>x0==z</code>, which is <code>x0==0</code>.<br>The other path condition is <code>x0!=0</code></p>
+<p>Now we solve the two paths one by one, starting with the first which leads us into the if statement</p>
+<p>It’s easy to solve to get <code>x0 == 0</code></p>
+<p>We replace our initial x=100 with <code>x=0</code> in order to continue.</p>
+<p>Now at the next branch, again we have two path conditions:</p>
+<p>The first is <code>x0==foo(y0) AND x0 &gt; y0+10</code> and the inverse of that is <code>x0==foo(y0) AND x0 &lt;= y0+10</code>.</p>
+<p>We try to solve for the first path again.</p>
+<p>Since the first part involes an unwanted function, we will symbolically solve the second part, enumuerating all possible sets of <code>x0</code> and <code>y0</code>.</p>
+<p>Then, we will concretely test the condition by feeding all generated values of <code>x0</code> and <code>y0</code> into <code>foo</code> until we find a match.</p>
+<p>We find <code>x0=16</code> and <code>y0=4</code>, and move on the path.</p>
+<p>This input leads to ERROR, and we’ve found the bug.</p>
+<p>One con about this method is that it’s difficult to know when to stop analysing, because we do not try to obtain any reasoning regarding the <code>foo</code> function.</p>
+<p>If the foo function is just some random number generator that has no logic, we will be stuck generating an infinite sequence of <code>x0</code> and <code>y0</code> trying to satisfy it.</p>
+<p>Of course, all of these analyses work at either the binary level(like SAGE) or intermediate representation(IR) level(like KLEE).</p>
+<p>Pros of IR:</p>
+<ul>
+<li>Easy to implement with small number of high level instructions</li>
+<li>Architecture agnostic</li>
+</ul>
+<p>Cons of IR:</p>
+<ul>
+<li>Slower execution</li>
+</ul>
+<p>Pros of binary code:</p>
+<ul>
+<li>Faster execution</li>
+</ul>
+<p>Cons of binary code:</p>
+<ul>
+<li>Architecture dependent with huge amount of instructions to emulate.</li>
+</ul>
+<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>Here are some real life(production) concolic execution tools:</p>
+<ul>
+<li>KLEE</li>
+<li>SAGE(close source)</li>
+<li>Triton</li>
+<li>angr</li>
+</ul>
+<p>In essence, concolic/symbolic execution are theoretically feasible, but often faced with scalability issues such as path explosion and unsolvable constraints when implemented against real production softwares.</p>
+<p>As stated in the SAGE paper, Blackbox(regular fuzzing) is simple, lightweight, easy, and fast but can yield limited code coverage.</p>
+<p>Whitebox(symbolic execution aided fuzzing) is smarter but more complex.</p>
+<p>Apart from finding bugs, symbolic executors are also able to triage crashes(perhaps found through traditional fuzzing).</p>
+<p>I will research more into this and maybe write it up as a future blog post.</p>
+<p>Designing a production level symbolic executor require an insane amount of optimization, as well as binary instructions modelling and linking up with libraries to perform code coverage analysis, solve SMT and many more.</p>
+<p>As such, there aren’t many mature tools that are used by independent researchers to find bugs.</p>
+<p>Most prototypes from research papers are also hardly scalable, and the research around symbpolic execution seems to be in all directions.</p>
+<p>Building one from scratch is extremely complex and costly, so I will not venture there until I get a chance to maybe build one as part of research when I enter university.</p>
+<p>A question I still have is, since the goal of Symbolic Execution is to increase code coverage and explore all paths of a program, how is it able to find subtle bugs such as double free/overflows without running a concrete input?</p>
+<p>To answer this question, my next post should be a half reading/half lab post regarding <code>KLEE</code>.</p>
+<p>EOF</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://madhu.cs.illinois.edu/cs598-fall10/king76symbolicexecution.pdf">https://madhu.cs.illinois.edu/cs598-fall10/king76symbolicexecution.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=mffhPgsl8Ws">https://www.youtube.com/watch?v=mffhPgsl8Ws</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cs.cmu.edu/~aldrich/courses/17-355-18sp/notes/notes14-symbolic-execution.pdf">https://www.cs.cmu.edu/~aldrich/courses/17-355-18sp/notes/notes14-symbolic-execution.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cs.cmu.edu/~aldrich/courses/17-355-19sp/notes/notes15-concolic-testing.pdf">https://www.cs.cmu.edu/~aldrich/courses/17-355-19sp/notes/notes15-concolic-testing.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/Resery/-Symbolic-Execution-For-Bug-Hunting-in-Binaries">https://github.com/Resery/-Symbolic-Execution-For-Bug-Hunting-in-Binaries</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.csie.ntu.edu.tw/~hchsiao/pub/2018_IEEE_DSC.pdf">https://www.csie.ntu.edu.tw/~hchsiao/pub/2018_IEEE_DSC.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://queue.acm.org/detail.cfm?id=2094081">https://queue.acm.org/detail.cfm?id=2094081</a></li>
+</ul>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
 			 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">cve</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
         		</li>
       		 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">pkexec</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">symex</a>
         		</li>
       		
 		</ul>
 	</div>
 
-          
+      
 
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2022/12/18/symex1/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/01/23/scinjection3/" class="archive-article-date">
-  	<time datetime="2022-01-23T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-01-23</time>
-</a>
+<nav id="article-nav">
+  
+  
+    <a href="/2022/12/14/fuzzing1/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">Fuzzing 1</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
         </div>
-    	 
+        
+        
+    </div>
+</aside>
+
+
+
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/01/23/scinjection3/">Remote Shellcode Injection - 3</a>
-    </h1>
+  
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">redteam</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">shellcoding</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-  
-    </div></section>
   
 
-    
+  
+
+  
 
 
           </div>
@@ -268,8 +442,8 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
-		isArchive: true,
+		isPost: true,
+		isArchive: false,
 		isTag: false,
 		isCategory: false,
 		open_in_new: false,
