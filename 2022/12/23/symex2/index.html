@@ -6,14 +6,20 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Archives: 2022 | cppblog</title>
+  <title>Symbolic Execution 2 | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/archives/2022/index.html">
+  <meta name="description" content="A Review of KLEE’s internal design">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Symbolic Execution 2">
+<meta property="og:url" content="http://example.com/2022/12/23/symex2/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="A Review of KLEE’s internal design">
 <meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-12-23T08:00:00.000Z">
+<meta property="article:modified_time" content="2022-12-23T09:39:43.388Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="reads">
+<meta property="article:tag" content="symex">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
@@ -142,36 +148,146 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
+            <article id="post-symex2" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
+    
+      <header class="article-header">
+        
   
+    <h1 class="article-title" itemprop="name">
+      Symbolic Execution 2
+    </h1>
   
-    
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2022" class="archive-year">2022</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/12/23/symex2/" class="archive-article-date">
+
+        
+        <a href="/2022/12/23/symex2/" class="archive-article-date">
   	<time datetime="2022-12-23T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-23</time>
 </a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/12/23/symex2/">Symbolic Execution 2</a>
-    </h1>
-  
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>A Review of KLEE’s internal design</p>
+<span id="more"></span>
 
-        <div class="article-info info-on-right">
-          
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>Following my previous post on the overview of <code>Symbolic Execution</code>, let’s review a specific implementation of a SE engine, to see how this approach can be concretized in the real world to aid program analysis and bug hunting against real softwares.</p>
+<p><code>KLEE</code> is selected due to its prevalence and proven ability to audit production level software.</p>
+<h2 id="KLEE-Overview"><a href="#KLEE-Overview" class="headerlink" title="KLEE Overview"></a>KLEE Overview</h2><p>KLEE works on <code>LLVM Intermediate Representation(IR)</code>, which is a high level machine code that the source compiles to.</p>
+<p>KLEE directly interprets the LLVM IR to create symbolic processes known as <code>states</code> with registers, stack, heap, program counter, and path condition.</p>
+<p>At any one time, there can be a large number of states waiting for KLEE to execute.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">The core of KLEE is an interpreter loop, which selects a state to run and symbolically executes a single instruction in the context of that state.</span><br></pre></td></tr></table></figure>
+
+<p>This continues until no states are remaining, or a user-defined timeout is reached.</p>
+<p>Instead of raw data values, <code>expressions</code> are stored on the symbolic register, stack or heap, in the form of a <code>tree</code>.</p>
+<p>The leaves are symbolic values or constants, and the interior nodes are LLVM IR operations, such as <code>add</code>, <code>sub</code>.</p>
+<p>Take the</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">%dst &#x3D; add i32 %src0, %src1</span><br></pre></td></tr></table></figure>
+<p>instruction as example</p>
+<p>KLEE retrieves the addends from the <code>%src0</code> and <code>%src1</code> registers and writes a new expression <code>Add(%src0, %src1)</code> to the <code>%dst</code> register.<br>For efficiency, the code that builds expressions checks if all given operands are concrete (i.e., constants) and, if so, performs the operation natively, returning a constant expression.</p>
+<p>When a conditional branch is hit, KLEE invokes the constraint solver to check if the boolean constraint can be proven true or false, and eliminates infeasible paths(to prevent path explosion as we’ve discussed previously).</p>
+<p>If both paths are feasible, KLEE clones the current state so that it can explore both paths, updating the <code>instruction pointer</code> and <code>path condition</code> on each path appropriately.</p>
+<h2 id="Bug-Checking"><a href="#Bug-Checking" class="headerlink" title="Bug Checking"></a>Bug Checking</h2><p>How does KLEE check for bugs?</p>
+<p>Potentially dangerous operations implicitly generate branches that check if any input value exists that could cause an error. </p>
+<p>For example, a division instruction generates a branch that checks for a zero divisor. Such branches work identically to normal branches. Thus, even when the check succeeds (i.e., an error is detected), execution continues on the false path, which adds the negation of the check as a constraint (e.g., making the divisor not zero). If an error is detected, KLEE generates a test case to trigger the error and terminates the state.</p>
+<p>In higher level terms, it means a</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">a &#x3D; b &#x2F; c;</span><br></pre></td></tr></table></figure>
+<p>instruction will become</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">if (c)</span><br><span class="line">  a &#x3D; b &#x2F; c;</span><br><span class="line">else</span><br><span class="line">  CRASH;</span><br></pre></td></tr></table></figure>
+
+<p>As with other dangerous operations, load and store instructions generate checks, in this case to check that the address is in-bounds of a valid memory object.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">a[j] &#x3D; 999;</span><br></pre></td></tr></table></figure>
+
+<p>will become</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">if (0 &lt;&#x3D; j &lt; sizeof(a))</span><br><span class="line">  a[j] &#x3D; 999;</span><br><span class="line">else</span><br><span class="line">  CRASH;</span><br></pre></td></tr></table></figure>
+
+<p>To facilitate the SMT solver, every memory object will be mapped as a SMT array object(i guess solved with the theory of arrays). </p>
+<p>When a dereferenced pointer p can refer to N objects(struct in struct to emulate type polymorphism?), KLEE clones the current state N times. In each state it constrains p to be within bounds of its respective object and then performs the appropriate read or write operation.</p>
+<h2 id="Optimizations"><a href="#Optimizations" class="headerlink" title="Optimizations"></a>Optimizations</h2><p>KLEE’s optimizations include:</p>
+<ul>
+<li><p>copy-on-write on object level instead of page level</p>
+</li>
+<li><p>sharing heap structures across multiple states, which can be cloned in constant time</p>
+</li>
+<li><p>expression rewriting</p>
+</li>
+</ul>
+<p> 2x - x is simplified to x</p>
+<ul>
+<li>constraint set simplification</li>
+</ul>
+<p> For example, imagine an inexact constraint such as <code>x &lt; 10</code> gets added, followed some time later by a constraint <code>x = 5</code>. KLEE actively simplifies the constraint set by rewriting previous constraints when new equality constraints are added to the constraint set. In this example, substituting <code>x = 5</code> into the first constraint simplifies it to TRUE, so KLEE eliminates the <code>x &lt; 10</code> constraint.</p>
+<ul>
+<li>implied concretization</li>
+</ul>
+<p> When a constraint such as <code>x + 1 = 10</code> is added to the path condition, x is concretized to be 9 along that path, and it <code>has</code> to be 9. KLEE notes that and writes the constant to memory, such that future operations use cheaper constant expressions.</p>
+<ul>
+<li>constraint independence</li>
+</ul>
+<p> Constraints that don’t overlap in memory are independent, and when a query is initiated, only relevant constraints in the constraint set will be sent to the solver.</p>
+<ul>
+<li>counter-example cache</li>
+</ul>
+<p> Basically a cache that stores a constraint set, along with an instance of a concrete solution(or a special “no solution” sentinel if the constraint is not solvable) in a UBTree. Based on the cache, it uses 3 rules to reduce redundancy.</p>
+<ol>
+<li>If a subset of a constraint set has no solutions, the original constraint set also will not</li>
+<li>If the original constraint set is satisfiable, a subset of it is satisfiable with the same solution</li>
+<li>If a subset of a constraint set has a solution, it is <code>LIKELY</code> that this is also a solution to the original set.</li>
+</ol>
+<p>Because checking a potential solution is cheap, KLEE tries substituting in all solutions for subsets of the constraint set and returns a satisfying solution, if found.</p>
+<p><em>This managed to reduce the number of queries KLEE makes to the SMT solver by a whopping 95%, and the efficacy increases with time.</em></p>
+<h2 id="State-Selection"><a href="#State-Selection" class="headerlink" title="State Selection"></a>State Selection</h2><p>Now how does KLEE select a state to execute?</p>
+<p>It uses the following 2 methods one by one:</p>
+<ol>
+<li>Random path selection</li>
+</ol>
+<p>KLEE maintains a binary tree with each interior node being the point of the  program that branched, and each leaf node containing the state of each branch. States are selected by traversing this tree from the root and randomly selecting the path to follow at branch points.</p>
+<p>This does not take into account the depth of each subtree, so it does not skew selection against shallower trees(which are more likely to explore new paths due to their relatively more free constraints).</p>
+<p>It also avoids “starvation”, where a part of a program is rapidly creating new states in a tight loop and it just keeps expanding and taking up execution time.</p>
+<ol start="2">
+<li>Coverage-Optimized search</li>
+</ol>
+<p>A weight for each state is computed, based on heuristics like the minimum distance to an uncovered instruction, the call stack, and whether the state recently discovered new code.</p>
+<p><em>Not sure why the call stack adds to the weight.<br>Do they assume that a lengthier callstack means the program has probably already forked to its maximum?</em></p>
+<p>Let’s review the code to find out</p>
+<h3 id="lib-Core-Searcher-cpp-176"><a href="#lib-Core-Searcher-cpp-176" class="headerlink" title="lib/Core/Searcher.cpp:176"></a>lib/Core/Searcher.cpp:176</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">double</span> <span class="title">WeightedRandomSearcher::getWeight</span><span class="params">(ExecutionState *es)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">switch</span>(type) &#123;</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">    <span class="keyword">case</span> Depth:</span><br><span class="line">      <span class="keyword">return</span> es-&gt;depth;</span><br><span class="line">    <span class="keyword">case</span> RP:</span><br><span class="line">      <span class="keyword">return</span> <span class="built_in">std</span>::<span class="built_in">pow</span>(<span class="number">0.5</span>, es-&gt;depth);</span><br><span class="line">    <span class="keyword">case</span> InstCount: &#123;</span><br><span class="line">      <span class="keyword">uint64_t</span> count = theStatisticManager-&gt;getIndexedValue(stats::instructions,</span><br><span class="line">                                                            es-&gt;pc-&gt;info-&gt;id);</span><br><span class="line">      <span class="keyword">double</span> inv = <span class="number">1.</span> / <span class="built_in">std</span>::max((<span class="keyword">uint64_t</span>) <span class="number">1</span>, count);</span><br><span class="line">      <span class="keyword">return</span> inv * inv;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">case</span> CPInstCount: &#123;</span><br><span class="line">      StackFrame &amp;sf = es-&gt;<span class="built_in">stack</span>.back();</span><br><span class="line">      <span class="keyword">uint64_t</span> count = sf.callPathNode-&gt;statistics.getValue(stats::instructions);</span><br><span class="line">      <span class="keyword">double</span> inv = <span class="number">1.</span> / <span class="built_in">std</span>::max((<span class="keyword">uint64_t</span>) <span class="number">1</span>, count);</span><br><span class="line">      <span class="keyword">return</span> inv;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">case</span> QueryCost:</span><br><span class="line">      <span class="keyword">return</span> (es-&gt;queryMetaData.queryCost.toSeconds() &lt; <span class="number">.1</span>)</span><br><span class="line">                 ? <span class="number">1.</span></span><br><span class="line">                 : <span class="number">1.</span> / es-&gt;queryMetaData.queryCost.toSeconds();</span><br><span class="line">    <span class="keyword">case</span> CoveringNew:</span><br><span class="line">    <span class="keyword">case</span> MinDistToUncovered: &#123;</span><br><span class="line">      <span class="keyword">uint64_t</span> md2u = computeMinDistToUncovered(es-&gt;pc,</span><br><span class="line">                                                es-&gt;<span class="built_in">stack</span>.back().minDistToUncoveredOnReturn);</span><br><span class="line"></span><br><span class="line">      <span class="keyword">double</span> invMD2U = <span class="number">1.</span> / (md2u ? md2u : <span class="number">10000</span>);</span><br><span class="line">      <span class="keyword">if</span> (type == CoveringNew) &#123;</span><br><span class="line">        <span class="keyword">double</span> invCovNew = <span class="number">0.</span>;</span><br><span class="line">        <span class="keyword">if</span> (es-&gt;instsSinceCovNew)</span><br><span class="line">          invCovNew = <span class="number">1.</span> / <span class="built_in">std</span>::max(<span class="number">1</span>, (<span class="keyword">int</span>) es-&gt;instsSinceCovNew - <span class="number">1000</span>);</span><br><span class="line">        <span class="keyword">return</span> (invCovNew * invCovNew + invMD2U * invMD2U);</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> invMD2U * invMD2U;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Seems like it is taking a <code>StackFrame </code>structure, stored at the start of the stack, and retrieving the total number of instructions executed since the start of the new StackFrame(current function) from the <code>callPathNode</code> member.</p>
+<p>The calculated weight is the inverse of this number.</p>
+<p>This matches our hypothesis, as the path should be less likely to discover new code the more instructions it has already executed.</p>
+<p><em>It’s pretty logical that the total instructions executed is weighted less than the number of instructions executed in the current stack frame. However, I do not understand the choice behind giving <code>depth</code> such a high weightage. Shouldn’t deeper code be less likely to cover new paths?</em></p>
+<p>KLEE ensures that a state which frequently executes expensive instructions will not dominate execution time by running each state for a “time slice” defined by both a maximum number of instructions and a maximum amount of time.</p>
+<h2 id="Environment-Modelling"><a href="#Environment-Modelling" class="headerlink" title="Environment Modelling"></a>Environment Modelling</h2><p>Now time to discuss environment modelling, the greatest obstacle of modern symbolic executors.</p>
+<p>Keeping up with the symbolic-ness, operations that deal with environment variables, files or network packets should be symbolic too.</p>
+<p>We conceptually want to return all values that the read could legally produce, rather than just a single concrete value. When it writes to its environment, the effects of these alterations should be reflected in subsequent reads. </p>
+<p>KLEE achieves this by using C code to model around 40 system calls, such as <code>open</code>, <code>read</code>, <code>write</code>, <code>stat</code>, <code>lseek</code>.</p>
+<p>This is customizable and extendable by the user without understanding KLEE’s internals. Amazing!</p>
+<p>Filesystem syscalls that deal with symbolic values interact with a symbolic filesystem, where the user of KLEE can specify the amount of files in it and their sizes.</p>
+<p>Example modeling the open syscall:</p>
+<p>the call </p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">int fd &#x3D; open(&quot;&#x2F;etc&#x2F;fstab&quot;, O_RDNLY);</span><br></pre></td></tr></table></figure>
+<p>to a concrete value will be delegated to the actual open syscall</p>
+<p>the call</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">int fd &#x3D; open(argv[1], O_RDNLY);</span><br></pre></td></tr></table></figure>
+<p>will instead result in two paths:</p>
+<p>one in which <code>fd</code> points to a single symbolic file in the environment, and one in which <code>fd</code> is set to -1 indicating an error.</p>
+<p>In the process it’s possible to configure(optional) KLEE to simulate environmental failures, such as a <code>write()</code> fail due to full disk.</p>
+<p>KLEE chooses to model syscalls instead of standard library functions because the huge amount of standard functions present will make modelling tedious and error prone.</p>
+<p>At time of writing(2008) KLEE was able to achieve over 90% average line coverage across GNU CoreUtils.</p>
+<p>0.0 impressive!</p>
+<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>The dive into KLEE internals is extremely interesting, and it shows how researchers are able to bridge theoretical advances into production level tools.</p>
+<p>Our previous doubt of how symbolic executors are able to find bugs is also cleared by reading this paper(<a target="_blank" rel="noopener" href="https://llvm.org/pubs/2008-12-OSDI-KLEE.pdf">https://llvm.org/pubs/2008-12-OSDI-KLEE.pdf</a>), and we now know that KLEE rewrites operations to perform error checking.</p>
+<p>With new bug types emerging(such as type confusion which is not as prevalent in 2008), can KLEE be easily extended to include such checks? I don’t think so.</p>
+<p>However, it’s assuring that users can easily customize the modelled syscalls without reading through the ten thousand lines of cpp.</p>
+<p>The results seem very promising even for vanilla usage, and I can’t wait to play with it in the next post :)</p>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
@@ -187,405 +303,106 @@
 		</ul>
 	</div>
 
-          
+      
 
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2022/12/23/symex2/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/12/18/symex1/" class="archive-article-date">
-  	<time datetime="2022-12-18T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-18</time>
-</a>
+<nav id="article-nav">
+  
+  
+    <a href="/2022/12/18/symex1/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">Symbolic Execution 1</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
         </div>
-    	 
+        
+        
+    </div>
+</aside>
+
+
+
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/12/18/symex1/">Symbolic Execution 1</a>
-    </h1>
+  
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">symex</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/12/14/fuzzing1/" class="archive-article-date">
-  	<time datetime="2022-12-14T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-14</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/12/14/fuzzing1/">Fuzzing 1</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/11/16/initial-access/" class="archive-article-date">
-  	<time datetime="2022-11-16T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-11-16</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/11/16/initial-access/">A word on initial access</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">redteam</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/09/03/cve-2021-31956/" class="archive-article-date">
-  	<time datetime="2022-09-03T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-09-03</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/09/03/cve-2021-31956/">CVE-2021-31956 exploit and analysis</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">cve</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/07/28/kerberos-delegations/" class="archive-article-date">
-  	<time datetime="2022-07-28T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-07-28</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/07/28/kerberos-delegations/">Kerberos and Delegations</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">activedirectory</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/05/06/exploit-inherited-handles/" class="archive-article-date">
-  	<time datetime="2022-05-06T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-05-06</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/05/06/exploit-inherited-handles/">Exploiting Inherited Handles</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/04/25/HEVD-Stack/" class="archive-article-date">
-  	<time datetime="2022-04-25T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-04-25</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/04/25/HEVD-Stack/">Windows Kernel Driver Exploitation - 1</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/01/26/cve-2021-4034/" class="archive-article-date">
-  	<time datetime="2022-01-26T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-01-26</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/01/26/cve-2021-4034/">CVE-2021-4034 exploit and analysis</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">cve</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">pkexec</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/01/23/scinjection3/" class="archive-article-date">
-  	<time datetime="2022-01-23T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-01-23</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/01/23/scinjection3/">Remote Shellcode Injection - 3</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">redteam</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">shellcoding</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-  
-    </div></section>
-  
-
-    
 
 
           </div>
@@ -608,8 +425,8 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
-		isArchive: true,
+		isPost: true,
+		isArchive: false,
 		isTag: false,
 		isCategory: false,
 		open_in_new: false,
