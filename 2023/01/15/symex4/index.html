@@ -6,15 +6,26 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Archives: 2022/12 | cppblog</title>
+  <title>Symbolic Execution 4 | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/archives/2022/12/index.html">
+  <meta name="description" content="Analysing coverage">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Symbolic Execution 4">
+<meta property="og:url" content="http://example.com/2023/01/15/symex4/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="Analysing coverage">
 <meta property="og:locale" content="en_US">
+<meta property="og:image" content="http://example.com/2023/01/15/symex4/kcachegrind_output.png">
+<meta property="og:image" content="http://example.com/2023/01/15/symex4/uncovered.png">
+<meta property="og:image" content="http://example.com/2023/01/15/symex4/no_context.png">
+<meta property="og:image" content="http://example.com/2023/01/15/symex4/setcolumn.png">
+<meta property="og:image" content="http://example.com/2023/01/15/symex4/newtarget.png">
+<meta property="article:published_time" content="2023-01-15T08:00:00.000Z">
+<meta property="article:modified_time" content="2023-01-20T06:43:16.654Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="symex">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2023/01/15/symex4/kcachegrind_output.png">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
   
@@ -142,36 +153,101 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-  
+            <article id="post-symex4" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
     
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      Symbolic Execution 4
+    </h1>
+  
+
+        
+        <a href="/2023/01/15/symex4/" class="archive-article-date">
+  	<time datetime="2023-01-15T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-01-15</time>
+</a>
+        
+      </header>
     
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>Analysing coverage</p>
+<span id="more"></span>
+
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>In the previous post we set up KLEE and did a test against various softwares.</p>
+<p>Although it was able to attain 100% coverage on small toy softwares, it seemed to struggle against production level complex libraries, completing no paths and only exploring about 30k paths in 10 mins(vs 450k paths against coreutils <code>echo</code> in the same timespan).</p>
+<p>We speculate the problem to be with our harness being too restrictive, as well as the size of the symbolic buffer being too large.</p>
+<p>In this post, let’s measure the coverage of the run and see exactly which part of code was exercised, and the actions we should take for a more wholesome symex session.</p>
+<h2 id="klee-stats"><a href="#klee-stats" class="headerlink" title="klee-stats"></a>klee-stats</h2><p><code>klee-stats</code> is a tool that comes with klee to describe the instruction and branch coverage of a klee run.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">klee@9523002f7332:&#x2F;host&#x2F;test5&#x2F;libxlsxwriter&#x2F;lib$ klee-stats klee-out-1</span><br><span class="line">--------------------------------------------------------------------------</span><br><span class="line">|   Path   |   Instrs|  Time(s)|  ICov(%)|  BCov(%)|  ICount|  TSolver(%)|</span><br><span class="line">--------------------------------------------------------------------------</span><br><span class="line">|klee-out-1|322465788|   637.94|    14.45|     9.83|  131393|        6.12|</span><br><span class="line">--------------------------------------------------------------------------</span><br></pre></td></tr></table></figure>
+
+<p>When used with the <code>--libc=uclibc</code> option, these data are of little value because library functions are counted in the overall coverage calculation too, resulting in a usually less than 20% coverage.</p>
+<h2 id="kcachegrind"><a href="#kcachegrind" class="headerlink" title="kcachegrind"></a>kcachegrind</h2><p><code>kcachegrind</code> is a separate GUI tool to visualise coverage, and can be installed via your regular package manager.</p>
+<p>Periodically during every klee session, a <code>run.istats</code> file is dropped into the output directory. This file contains coverage information for that particular klee run.</p>
+<p>We can open it up in kcachegrind to view coverage and call graph.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">awae@ubuntu:&#x2F;mnt&#x2F;hgfs&#x2F;klee&#x2F;test5&#x2F;libxlsxwriter&#x2F;lib$ kcachegrind klee-out-1&#x2F;run.istats</span><br></pre></td></tr></table></figure>
+
+<img src="/2023/01/15/symex4/kcachegrind_output.png" class="" title="output">
+
+<p>In the left column we see a list of function names, including those from our harness, the libxlsxwriter library and also uclibc.</p>
+<p><code>Incl.</code> shows the percentage of all instructions called from that function, including child functions. Obviously functions like main have 100%.</p>
+<p><code>Self</code> shows the percentage but not including child functions.</p>
+<p>The panes on the right shows the section of source code relevant to our current display, which is <code>Instructions</code> as shown on the top right hand corner.</p>
+<p>Source code have to be added manually via <code>Settings-&gt;Configure KCachegrind-&gt;Annotations</code></p>
+<p>The bottom pane shows a call graph.</p>
+<p>We can change the selection by clicking on the currently selected <code>Instructions</code> tab, and changing it to <code>UncoveredInstructions</code></p>
+<img src="/2023/01/15/symex4/uncovered.png" class="" title="output">
+
+<p>We search for the buggy function from the previous post, and find these 3 lines of code highlighted in white uncovered. The remaining highlighted code are for context.</p>
+<p>The reason is because when <code>worksheet_write_datetime</code> calls this function, it passes in a constant <code>LXW_EPOCH_1900</code>, which always sets the variable <code>date_1904</code> to false.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LXW_EPOCH_1900            0</span></span><br><span class="line"></span><br><span class="line">excel_date = lxw_datetime_to_excel_date_epoch(datetime, LXW_EPOCH_1900);</span><br></pre></td></tr></table></figure>
+
+<p>Note: The highlights are quite buggy when multiple context lines are displayed. I recommend setting it to 0 to note the lines not executed, then using a separate code browser to view the annotations.</p>
+<p>Example:</p>
+<img src="/2023/01/15/symex4/no_context.png" class="" title="output">
+
+<p>This is much clearer as it only displays uncovered lines.</p>
+<p>Another major function our harness fuzzed was the <code>worksheet_set_column_opt</code> function.</p>
+<img src="/2023/01/15/symex4/setcolumn.png" class="" title="output">
+
+<p>Inspecting the coverage output reveals that both functions were fuzzed very comprehensively, and no functional pieces were left out. We can conclude that the harness worked well, but the design of the harness only allowed us to target these two functions.</p>
+<p>Knowing this, we can employ another technique, bottom up fuzzing.</p>
+<h2 id="Bottom-Up-Approach"><a href="#Bottom-Up-Approach" class="headerlink" title="Bottom Up Approach"></a>Bottom Up Approach</h2><p>Instead of trying to write an all comprehensive harness and let KLEE do the work, we can use static analysis to find potentially dangerous functions such as <code>memcpy</code>, and instruct KLEE to explore that specific function.</p>
+<p>For example:</p>
+<img src="/2023/01/15/symex4/newtarget.png" class="" title="output">
+
+<p>We find an insert image function that invokes memcpy based on an image buffer. This also calls into a tiny image verifier, which we can potentially fuzz.</p>
+<p>Spoiler: I’ve tested this and there are no bugs, so not gonna write about it here.</p>
+<p>You can also test small, independent helper functions by copying them out separately.</p>
+<p>For example:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;klee/klee.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LXW_MAX_ATTRIBUTE_LENGTH 4   <span class="comment">/* for small testing */</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LXW_AMP  <span class="meta-string">&quot;&amp;amp;&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LXW_LT   <span class="meta-string">&quot;&amp;lt;&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LXW_GT   <span class="meta-string">&quot;&amp;gt;&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LXW_QUOT <span class="meta-string">&quot;&amp;quot;&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LXW_NL   <span class="meta-string">&quot;&amp;#xA;&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">/* Defines. */</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LXW_MAX_ENCODED_ATTRIBUTE_LENGTH (LXW_MAX_ATTRIBUTE_LENGTH*6)</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/* Attribute used in XML elements. */</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">xml_attribute</span> &#123;</span></span><br><span class="line">    <span class="keyword">char</span> key[LXW_MAX_ATTRIBUTE_LENGTH];</span><br><span class="line">    <span class="keyword">char</span> value[LXW_MAX_ATTRIBUTE_LENGTH];</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Make the struct a queue.h list element. */</span></span><br><span class="line">    <span class="comment">// STAILQ_ENTRY (xml_attribute) list_entries; We don&#x27;t need this</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">char</span> *_escape_attributes(struct xml_attribute *attribute);</span><br><span class="line"></span><br><span class="line"><span class="keyword">char</span> *</span><br><span class="line">_escape_attributes(struct xml_attribute *attribute)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">char</span> *encoded = (<span class="keyword">char</span> *) <span class="built_in">calloc</span>(LXW_MAX_ENCODED_ATTRIBUTE_LENGTH, <span class="number">1</span>);</span><br><span class="line">    <span class="keyword">char</span> *p_encoded = encoded;</span><br><span class="line">    <span class="keyword">char</span> *p_attr = attribute-&gt;value;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (*p_attr) &#123;</span><br><span class="line">        <span class="keyword">switch</span> (*p_attr) &#123;</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;&amp;&#x27;</span>:</span><br><span class="line">                <span class="built_in">memcpy</span>(p_encoded, LXW_AMP, <span class="keyword">sizeof</span>(LXW_AMP) - <span class="number">1</span>);</span><br><span class="line">                p_encoded += <span class="keyword">sizeof</span>(LXW_AMP) - <span class="number">1</span>;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;&lt;&#x27;</span>:</span><br><span class="line">                <span class="built_in">memcpy</span>(p_encoded, LXW_LT, <span class="keyword">sizeof</span>(LXW_LT) - <span class="number">1</span>);</span><br><span class="line">                p_encoded += <span class="keyword">sizeof</span>(LXW_LT) - <span class="number">1</span>;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;&gt;&#x27;</span>:</span><br><span class="line">                <span class="built_in">memcpy</span>(p_encoded, LXW_GT, <span class="keyword">sizeof</span>(LXW_GT) - <span class="number">1</span>);</span><br><span class="line">                p_encoded += <span class="keyword">sizeof</span>(LXW_GT) - <span class="number">1</span>;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;&quot;&#x27;</span>:</span><br><span class="line">                <span class="built_in">memcpy</span>(p_encoded, LXW_QUOT, <span class="keyword">sizeof</span>(LXW_QUOT) - <span class="number">1</span>);</span><br><span class="line">                p_encoded += <span class="keyword">sizeof</span>(LXW_QUOT) - <span class="number">1</span>;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;\n&#x27;</span>:</span><br><span class="line">                <span class="built_in">memcpy</span>(p_encoded, LXW_NL, <span class="keyword">sizeof</span>(LXW_NL) - <span class="number">1</span>);</span><br><span class="line">                p_encoded += <span class="keyword">sizeof</span>(LXW_NL) - <span class="number">1</span>;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            <span class="keyword">default</span>:</span><br><span class="line">                *p_encoded = *p_attr;</span><br><span class="line">                p_encoded++;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        p_attr++;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> encoded;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">xml_attribute</span> <span class="title">x</span>;</span></span><br><span class="line">    klee_make_symbolic(&amp;x, <span class="keyword">sizeof</span>(x), <span class="string">&quot;struct&quot;</span>);</span><br><span class="line">    x.key[LXW_MAX_ATTRIBUTE_LENGTH<span class="number">-1</span>] = <span class="number">0</span>;</span><br><span class="line">    x.value[LXW_MAX_ATTRIBUTE_LENGTH<span class="number">-1</span>] = <span class="number">0</span>;</span><br><span class="line"> </span><br><span class="line">    _escape_attributes(&amp;x);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Here we copied the implementation of the <code>_escape_attributes</code> function to test independent of the libxlsxwriter library. A bug in KLEE exists(since 2016!) such that the individual members of a struct can’t be made symbolic(<a target="_blank" rel="noopener" href="https://github.com/klee/klee/issues/429">https://github.com/klee/klee/issues/429</a>). The workaround is to make the entire struct symbolic, then concretize individual members.</p>
+<p>These are just some of the approaches you can take when performing analysis with KLEE.</p>
+<p>I did mention exploring binary-only symbolic execution with <a target="_blank" rel="noopener" href="https://github.com/lifting-bits/mcsema">https://github.com/lifting-bits/mcsema</a> , but I realised that it requires IDA Pro and it’s probably not wise to demonstrate with a cracked version.</p>
+<p><em>Thus, this will be left as homework for the reader lol.</em></p>
+<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>This ends off the 4 part exploration of symbolic execution!</p>
+<p>Just to recap, we talked about Symbolic Execution in theory in the first part, discussed the specific design of a widely used symbolic execution engine in the second, used the engine against a variety of toy and production level binaries in the third, and analysed the different coverage metrics the engine had provided to us as well as discuss the varying approaches to perform symbolic execution in this last part.</p>
+<p>Here are some takeaways from this part:</p>
+<ul>
+<li><p>Keep your symbolic buffers small, if not the solver will hit the memory cap super fast and mess with the whole session.</p>
+</li>
+<li><p>“Completed Paths” does not always mean good coverage. The engine might be dying at trying to analyse the final cleanup function, which often is not your goal. Always check code coverage using kcachegrind periodically, as KLEE updates the run.istats file once a while.</p>
+</li>
+<li><p>The bottom up approach, combined with static analysis is usually the most effective way to utilise a symbolic execution engine.</p>
+</li>
+</ul>
+<p>The next post will be a start to a new series, where we analyse the interior workings of AFL, and fuzz some Windows binaries with WinAFL.</p>
+<p>..</p>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
       
       
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2022" class="archive-year">2022</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/12/29/symex3/" class="archive-article-date">
-  	<time datetime="2022-12-29T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-29</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/12/29/symex3/">Symbolic Execution 3</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
@@ -183,145 +259,115 @@
 		</ul>
 	</div>
 
-          
+      
 
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2023/01/15/symex4/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/12/23/symex2/" class="archive-article-date">
-  	<time datetime="2022-12-23T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-23</time>
-</a>
+<nav id="article-nav">
+  
+    <a href="/2099/11/11/prelude/" id="article-nav-newer" class="article-nav-link-wrap">
+      <i class="icon-circle-left"></i>
+      <div class="article-nav-title">
+        
+          Prelude
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2022/12/29/symex3/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">Symbolic Execution 3</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
         </div>
-    	 
+        
+        
+    </div>
+</aside>
+
+
+
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/12/23/symex2/">Symbolic Execution 2</a>
-    </h1>
+  
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">symex</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/12/18/symex1/" class="archive-article-date">
-  	<time datetime="2022-12-18T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-18</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/12/18/symex1/">Symbolic Execution 1</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">symex</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/12/14/fuzzing1/" class="archive-article-date">
-  	<time datetime="2022-12-14T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-14</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/12/14/fuzzing1/">Fuzzing 1</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
   
-  
-    </div></section>
-  
-
-    
 
 
           </div>
@@ -344,8 +390,8 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
-		isArchive: true,
+		isPost: true,
+		isArchive: false,
 		isTag: false,
 		isCategory: false,
 		open_in_new: false,
