@@ -6,14 +6,20 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Archives: 2021/3 | cppblog</title>
+  <title>Fuzzing 2 | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/archives/2021/03/index.html">
+  <meta name="description" content="Feature review of AFL and WinAFL">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Fuzzing 2">
+<meta property="og:url" content="http://example.com/2023/01/27/fuzzing2/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="Feature review of AFL and WinAFL">
 <meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2023-01-27T08:00:00.000Z">
+<meta property="article:modified_time" content="2023-01-27T11:42:31.028Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="fuzzing">
+<meta property="article:tag" content="reads">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
@@ -142,91 +148,276 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-  
+            <article id="post-fuzzing2" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
     
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2021" class="archive-year">2021</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/03/03/sudo-cve-analysis/" class="archive-article-date">
-  	<time datetime="2021-03-03T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-03-03</time>
-</a>
-        </div>
-    	 
+      <header class="article-header">
+        
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/03/03/sudo-cve-analysis/">CVE-2019-18634 Analysis</a>
+    <h1 class="article-title" itemprop="name">
+      Fuzzing 2
     </h1>
   
 
-        <div class="article-info info-on-right">
-          
+        
+        <a href="/2023/01/27/fuzzing2/" class="archive-article-date">
+  	<time datetime="2023-01-27T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-01-27</time>
+</a>
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>Feature review of AFL and WinAFL</p>
+<span id="more"></span>
+
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>Since we’ve already talked about the types of fuzzing quite some time ago(Fuzzing 1), let’s dive straight into the overview of <code>American Fuzzy Lop</code>(AFL), a coverage-based evolutionary fuzzer.</p>
+<p>In this post, we will go over the design inspiration of <code>AFL</code>, the inner workings of AFL, as well as <code>WinAFL</code>, a fork by ProjectZero to fuzz Windows binaries.</p>
+<h2 id="Inspiration"><a href="#Inspiration" class="headerlink" title="Inspiration"></a>Inspiration</h2><p>Before coverage-based evolutionary fuzzers were a thing in the late 2000s, researcher Tavis Ormandy(forgive me for making this sound like a history lesson… thought it’s quite disrespectful to leave out the name ;)) used <code>gcov</code> to measure coverage of various testcases to find the one with most coverage, then fed that as corpus to a dumb fuzzer.</p>
+<p>This act netted him quite a number of bugs, and sparked the thought <strong>“what if we performed this at a regular interval during the fuzzing session such that the test cases generated always favoured coverage”</strong>.</p>
+<p>However, creators soon realised that this approach of explicitly calculating coverage is <strong>resource intensive</strong>, which led to it looking good on paper but <strong>infeasible in practise</strong>.</p>
+<p>AFL’s main design principal then became “Simplicity and Useability”. For example, it just favours testcases that do something new, instead of actually reasoning coverage.</p>
+<p>Ad Verbatim:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">In fact, at its core, it&#39;s designed to be just a very good traditional fuzzer with a wide range of interesting, well-researched strategies to go by. The fancy parts just help it focus the effort in places where it matters the most.</span><br></pre></td></tr></table></figure>
+
+<h2 id="AFL-Details"><a href="#AFL-Details" class="headerlink" title="AFL Details"></a>AFL Details</h2><h3 id="Coverage"><a href="#Coverage" class="headerlink" title="Coverage"></a>Coverage</h3><p>Just like symbolic execution, <strong>coverage</strong> is one of, if not the most important feedback metric on the journey of program exploration.</p>
+<p>AFL collects coverage by using a <code>64kb</code> shared memory buffer. 64kb is chosen for efficient L2 cache access, and a decently low collision rate for most programs.</p>
+<p>The pseudocode is like:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">cur_location = &lt;COMPILE_TIME_RANDOM&gt;;</span><br><span class="line">shared_mem[cur_location ^ prev_location]++;</span><br><span class="line">prev_location = cur_location &gt;&gt; <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+<p>and is injected into every branch in the compiled source code, made possible by AFL’s custom implementation of compilers like <code>gcc</code>.</p>
+<p>Every byte set in the output map can be thought of as a hit for a particular (branch_src, branch_dst) tuple in the instrumented code.</p>
+<p>Why is <code>prev_location</code> divided by 2? This is to differentiate between paths of tight loops.</p>
+<p>For example, a loop surrounding branch <code>A</code>, such that the path produced is <code>A-&gt;A</code> will be calculated as <code>shared_mem[0]</code>, which is identical to that of path <code>B-&gt;B</code> if the division does not exist.</p>
+<p>When a mutated input produces an execution trace <strong>containing new tuples</strong>, the corresponding input file is favoured, preserved and routed for additional processing.</p>
+<p>If no new tuples are found, the input is discarded, even if the overall flow is unique.</p>
+<p>For example, gievn <code>A-&gt;B-&gt;C</code> and <code>C-&gt;A-&gt;B</code> already favoured, <code>A-&gt;B-&gt;E</code> will be preserved while <code>A-&gt;B-&gt;C-&gt;A</code> will be discarded, even though its flow is unique.</p>
+<p>The fuzzer also considers coarse tuple hit counts, divided into several buckets:<br>1, 2, 3, 4-7, 8-15, 16-31, 32-127, 128+</p>
+<p>Changes within the range of a single bucket are ignored(For example a loop cycling 40 times vs cycling 43 times); transition from one bucket to another is flagged as an interesting change in program control flow(a piece of code that was running once now runs twice, amazing!), and is favoured for evolution.</p>
+<h3 id="Evolution"><a href="#Evolution" class="headerlink" title="Evolution"></a>Evolution</h3><p>These favoured test cases are added back into the input queue, and used as a corpus for next rounds of fuzzing.</p>
+<p>AFL does not prioritise these newly added corpuses over the current queue of corpuses, and simply queues them behind the current corpuses. This design is proven more effective empirically.</p>
+<p><em>If you imagine it in action, it’s similar to an ever shrinking circle, instead of a directed “spear” that pokes everywhere if we had prioritised these new mutations.</em></p>
+<p>Among the queue of test cases, AFL periodically re-evaluates the queue using a fast algorithm that <strong>selects a smaller subset</strong> of test cases that still cover every tuple seen so far. It works by looping through the tuple, find the testcases that covers a tuple <strong>not in the small subset yet</strong>, select the smallest(file) and fastest(execution latency) testcase, then <strong>register all tuples</strong> that this testcase exercises into the subset. It repeats this process again until all tuples are iterated.</p>
+<p>The generated corpus of “favored” entries is usually 5-10x smaller than the starting data set. Non-favored entries are not discarded, but they are skipped with varying probabilities when encountered in the queue.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">- If there are new, yet-to-be-fuzzed favorites present in the queue, 99% of non-favored entries will be skipped to get to the favored ones.</span><br><span class="line"></span><br><span class="line">- If there are no new favorites:</span><br><span class="line"></span><br><span class="line">  - If the current non-favored entry was fuzzed before, it will be skipped 95% of the time.</span><br><span class="line"></span><br><span class="line">  - If it hasn&#39;t gone through any fuzzing rounds yet, the odds of skipping drop down to 75%.</span><br></pre></td></tr></table></figure>
+
+<p>A snippet:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (pending_favored) &#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* If we have any favored, non-fuzzed new arrivals in the queue,</span></span><br><span class="line"><span class="comment">       possibly skip to them at the expense of already-fuzzed or non-favored</span></span><br><span class="line"><span class="comment">       cases. */</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> ((queue_cur-&gt;was_fuzzed || !queue_cur-&gt;favored) &amp;&amp;</span><br><span class="line">        UR(<span class="number">100</span>) &lt; SKIP_TO_NEW_PROB) <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!dumb_mode &amp;&amp; !queue_cur-&gt;favored &amp;&amp; queued_paths &gt; <span class="number">10</span>) &#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Otherwise, still possibly skip non-favored cases, albeit less often.</span></span><br><span class="line"><span class="comment">       The odds of skipping stuff are higher for already-fuzzed inputs and</span></span><br><span class="line"><span class="comment">       lower for never-fuzzed entries. */</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (queue_cycle &gt; <span class="number">1</span> &amp;&amp; !queue_cur-&gt;was_fuzzed) &#123;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (UR(<span class="number">100</span>) &lt; SKIP_NFAV_NEW_PROB) <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (UR(<span class="number">100</span>) &lt; SKIP_NFAV_OLD_PROB) <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p><em>This adds some brains to our shrinking circle, removing some redundancy and prioritises shrinking of certain parts for efficiency. Since it does not actually discard any testcase, accuracy is not sacrificed in the long run.</em></p>
+<p>It also employs a minimization algorithm to actively try and reduce the size of the input testcase.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">The actual minimization algorithm is:</span><br><span class="line"></span><br><span class="line">  1) Attempt to zero large blocks of data with large stepovers. Empirically, this is shown to reduce the number of execs by preempting finer-grained efforts later on.</span><br><span class="line"></span><br><span class="line">  2) Perform a block deletion pass with decreasing block sizes and stepovers, binary-search-style. </span><br><span class="line"></span><br><span class="line">  3) Perform alphabet normalization by counting unique characters and trying to bulk-replace each with a zero value.</span><br><span class="line"></span><br><span class="line">  4) As a last result, perform byte-by-byte normalization on non-zero bytes.</span><br><span class="line"></span><br><span class="line">Instead of zeroing with a 0x00 byte, afl-tmin uses the ASCII digit &#39;0&#39;. This is done because such a modification is much less likely to interfere with text parsing, so it is more likely to result in successful minimization of text files.</span><br></pre></td></tr></table></figure>
+
+<p>A snippet of it:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Select initial chunk len, starting with large steps. */</span></span><br><span class="line"></span><br><span class="line">  len_p2 = next_p2(q-&gt;len);</span><br><span class="line"></span><br><span class="line">  remove_len = MAX(len_p2 / TRIM_START_STEPS, TRIM_MIN_BYTES);</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Continue until the number of steps gets too high or the stepover</span></span><br><span class="line"><span class="comment">     gets too small. */</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">while</span> (remove_len &gt;= MAX(len_p2 / TRIM_END_STEPS, TRIM_MIN_BYTES)) &#123;</span><br><span class="line"></span><br><span class="line">    u32 remove_pos = remove_len;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">sprintf</span>(tmp, <span class="string">&quot;trim %s/%s&quot;</span>, DI(remove_len), DI(remove_len));</span><br><span class="line"></span><br><span class="line">    stage_cur = <span class="number">0</span>;</span><br><span class="line">    stage_max = q-&gt;len / remove_len;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (remove_pos &lt; q-&gt;len) &#123;</span><br><span class="line"></span><br><span class="line">      u32 trim_avail = MIN(remove_len, q-&gt;len - remove_pos);</span><br><span class="line">      u32 cksum;</span><br><span class="line"></span><br><span class="line">      write_with_gap(in_buf, q-&gt;len, remove_pos, trim_avail);</span><br><span class="line"></span><br><span class="line">      fault = run_target(argv, exec_tmout);</span><br><span class="line">      trim_execs++;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (stop_soon || fault == FAULT_ERROR) <span class="keyword">goto</span> abort_trimming;</span><br><span class="line"></span><br><span class="line">      <span class="comment">/* Note that we don&#x27;t keep track of crashes or hangs here; maybe TODO? */</span></span><br><span class="line"></span><br><span class="line">      cksum = hash32(trace_bits, MAP_SIZE, HASH_CONST);</span><br><span class="line"></span><br><span class="line">      <span class="comment">/* If the deletion had no impact on the trace, make it permanent. This</span></span><br><span class="line"><span class="comment">         isn&#x27;t perfect for variable-path inputs, but we&#x27;re just making a</span></span><br><span class="line"><span class="comment">         best-effort pass, so it&#x27;s not a big deal if we end up with false</span></span><br><span class="line"><span class="comment">         negatives every now and then. */</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p><em>This algorithm is by no means elegant on paper, but it’s definitely effective and has a low overhead. For example, a bufferoverflow testcase that was initially <code>abcdefghijklmnopqrs</code> can be minimized to <code>0000000000000000000</code>, clearly revealing that specific characters are not required to trigger that path.</em></p>
+<h3 id="Mutation"><a href="#Mutation" class="headerlink" title="Mutation"></a>Mutation</h3><p>The original AFL engine consists of 2 stages of mutation.</p>
+<p>The first stage is highly deterministic, consisting of <code>sequential bit flips</code>, <code>byte flips</code>, <code>addition/subtraction of integers</code> and insertion of <code>interesting values</code>(such as -1, max integer etc). When changes to a certain region of the testcase does not trigger a new tuple, they may be excluded in the following deterministic runs for efficiency.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">  <span class="comment">/* We also use this stage to pull off a simple trick: we identify</span></span><br><span class="line"><span class="comment">     bytes that seem to have no effect on the current execution path</span></span><br><span class="line"><span class="comment">     even when fully flipped - and we skip them during more expensive</span></span><br><span class="line"><span class="comment">     deterministic stages, such as arithmetics or known ints. */</span></span><br><span class="line"></span><br><span class="line"> ...</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (len &lt; <span class="number">2</span>) <span class="keyword">goto</span> skip_bitflip;</span><br></pre></td></tr></table></figure>
+
+<p>The reason for this stage is to try and get a small difference between the initial corpus and crashing input so it’s easier for the user to reason about the final crashing testcase.</p>
+<p>The second stage consists of stacked, random operations mentioned above, as well as <code>splicing</code> of 2 testcases.</p>
+<h3 id="Dictionary"><a href="#Dictionary" class="headerlink" title="Dictionary"></a>Dictionary</h3><p>AFL supports the use of dictionaries to aid in fuzzing.</p>
+<p>An example PNG dictionary looks like:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">header_png&#x3D;&quot;\x89PNG\x0d\x0a\x1a\x0a&quot;</span><br><span class="line"></span><br><span class="line">section_IDAT&#x3D;&quot;IDAT&quot;</span><br><span class="line">section_IEND&#x3D;&quot;IEND&quot;</span><br><span class="line">section_IHDR&#x3D;&quot;IHDR&quot;</span><br><span class="line"></span><br><span class="line">&lt;more keywords&gt;</span><br></pre></td></tr></table></figure>
+<p>These keywords specified will be used by AFL when mutating testcases, in order to formulate correct header bytes efficiently to pass the format checks.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (!extras_cnt) <span class="keyword">goto</span> skip_user_extras;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Overwrite with user-supplied extras. */</span></span><br><span class="line"></span><br><span class="line">  stage_name  = <span class="string">&quot;user extras (over)&quot;</span>;</span><br><span class="line">  stage_short = <span class="string">&quot;ext_UO&quot;</span>;</span><br><span class="line">  stage_cur   = <span class="number">0</span>;</span><br><span class="line">  stage_max   = extras_cnt * len;</span><br><span class="line"></span><br><span class="line">  stage_val_type = STAGE_VAL_NONE;</span><br><span class="line"></span><br><span class="line">  orig_hit_cnt = new_hit_cnt;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; len; i++) &#123;</span><br><span class="line"></span><br><span class="line">    u32 last_len = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    stage_cur_byte = i;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Extras are sorted by size, from smallest to largest. This means</span></span><br><span class="line"><span class="comment">       that we don&#x27;t have to worry about restoring the buffer in</span></span><br><span class="line"><span class="comment">       between writes at a particular offset determined by the outer</span></span><br><span class="line"><span class="comment">       loop. */</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (j = <span class="number">0</span>; j &lt; extras_cnt; j++) &#123;</span><br><span class="line"></span><br><span class="line">      <span class="comment">/* Skip extras probabilistically if extras_cnt &gt; MAX_DET_EXTRAS. Also</span></span><br><span class="line"><span class="comment">         skip them if there&#x27;s no room to insert the payload, if the token</span></span><br><span class="line"><span class="comment">         is redundant, or if its entire span has no bytes set in the effector</span></span><br><span class="line"><span class="comment">         map. */</span></span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> ((extras_cnt &gt; MAX_DET_EXTRAS &amp;&amp; UR(extras_cnt) &gt;= MAX_DET_EXTRAS) ||</span><br><span class="line">          extras[j].len &gt; len - i ||</span><br><span class="line">          !<span class="built_in">memcmp</span>(extras[j].data, out_buf + i, extras[j].len) ||</span><br><span class="line">          !<span class="built_in">memchr</span>(eff_map + EFF_APOS(i), <span class="number">1</span>, EFF_SPAN_ALEN(i, extras[j].len))) &#123;</span><br><span class="line"></span><br><span class="line">        stage_max--;</span><br><span class="line">        <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      last_len = extras[j].len;</span><br><span class="line">      <span class="built_in">memcpy</span>(out_buf + i, extras[j].data, last_len);</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (common_fuzz_stuff(argv, out_buf, len)) <span class="keyword">goto</span> abandon_entry;</span><br><span class="line"></span><br><span class="line">      stage_cur++;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p><em>This is quite necessary when reasoning about parsers with strict checksum, unless you want AFL to spend weeks discovering the correct format. As we will soon see in the next post, AFL++ improves this by utilizing REDQUEEN to efficiently overcome checksums and magic bytes without the use of symex.</em> </p>
+<p>Apart from allowing the user to customize a dictionary of keywords for the fuzzer to follow, AFL attempts to <strong>automatically build a dictionary</strong> by using logic to collect certain parts of the testcase that it deems as a “keyword”.</p>
+<p>This blogpost by the creator of AFL explains it very well, so I’m just going to quote him.</p>
+<p><a target="_blank" rel="noopener" href="https://lcamtuf.blogspot.com/2015/01/afl-fuzz-making-up-grammar-with.html">https://lcamtuf.blogspot.com/2015/01/afl-fuzz-making-up-grammar-with.html</a></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">To explain the approach, it&#39;s useful to rely on the example of a PNG file. The PNG format uses four-byte, human-readable magic values to indicate the beginning of a section, say:</span><br><span class="line"></span><br><span class="line">89 50 4e 47 0d 0a 1a 0a 00 00 00 0d 49 48 44 52 | .PNG........IHDR 00 00 00 20 00 00 00 20 02 03 00 00 00 0e 14 92 | ................</span><br><span class="line"></span><br><span class="line">The algorithm in question can identify &quot;IHDR&quot; as a syntax token by piggybacking on top of the deterministic, sequential bit flips that are already being performed by afl-fuzz across the entire file. It works by identifying runs of bytes that satisfy a simple property: that flipping them triggers an execution path that is distinct from the product of flipping stuff in the neighboring regions, yet consistent across the entire sequence of bytes.</span><br><span class="line"></span><br><span class="line">This signal strongly implies that touching any of the affected bytes causes the failure of an underlying atomic check, such as header magic_value &#x3D;&#x3D; 0xDEADBEEF or strcmp(name, &quot;Set-Cookie&quot;). When such a behavior is detected, the entire blob of data is added to the dictionary, to be randomly recombined with other dictionary tokens later on.</span><br></pre></td></tr></table></figure>
+
+<h2 id="Duplication-Removal"><a href="#Duplication-Removal" class="headerlink" title="Duplication Removal"></a>Duplication Removal</h2><p>AFL considers the crash as unique if the following two conditions are met:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">- The crash trace includes a tuple not seen in any of the previous crashes,</span><br><span class="line"></span><br><span class="line">- The crash trace is missing a tuple that was always present in earlier faults.</span><br></pre></td></tr></table></figure>
+<p>A <code>-C</code> flag passed to AFL can be used to explore crashes. AFL mutates these crashes and attempts to find results that are clearly controllable from the input. For example, a segfault at an address corresponding to the testcase’s data will probably signify an arbitrary jump, which is surely something to note.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (fault == crash_mode) &#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Keep only if there are new bits in the map, add to queue for</span></span><br><span class="line"><span class="comment">       future fuzzing, etc. */</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!(hnb = has_new_bits(virgin_bits))) &#123;</span><br><span class="line">      <span class="keyword">if</span> (crash_mode) total_crashes++;</span><br><span class="line">      <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>This however adds <strong>workload that might be unnecessary</strong> to the queue, so I don’t recommend using it. Exploration can be done separately after the crash cases are reported.</p>
+<h3 id="Forkserver-and-Persistent-Mode"><a href="#Forkserver-and-Persistent-Mode" class="headerlink" title="Forkserver and Persistent Mode"></a>Forkserver and Persistent Mode</h3><p>AFL supports “forkserver mode” to improve efficiency.</p>
+<p>Essentially, it does nothing until the loader does all its work and the program is at its entry point. Then, it forks the current image and runs the fuzz on the forked process, such that just one round of loading is sufficient for the entire fuzzing session, and skips a lot of libc linking overhead.</p>
+<p>It works by <strong>injecting a shim into the program</strong> being fuzzed. The shim is injected right before the program’s entry point, and opens a pipe to communicate with AFL. Once the fork instruction is received, it forks and resumes execution of the binary in the child process, while the parent monitors it.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line">__afl_fork_wait_loop:</span><br><span class="line"></span><br><span class="line">  &#x2F;* Wait for parent by reading from the pipe. This will block until</span><br><span class="line">     the parent sends us something. Abort if read fails. *&#x2F;</span><br><span class="line"></span><br><span class="line">  pushl $4          &#x2F;* length    *&#x2F;</span><br><span class="line">  pushl $__afl_temp &#x2F;* data      *&#x2F;</span><br><span class="line">  pushl $198        &#x2F;* file desc *&#x2F;</span><br><span class="line">  call  read</span><br><span class="line">  addl  $12, %esp</span><br><span class="line"></span><br><span class="line">  cmpl  $4, %eax</span><br><span class="line">  jne   __afl_die</span><br><span class="line"></span><br><span class="line">  &#x2F;* Once woken up, create a clone of our process. *&#x2F;</span><br><span class="line"></span><br><span class="line">  call fork</span><br><span class="line"></span><br><span class="line">  cmpl $0, %eax</span><br><span class="line">  jl   __afl_die</span><br><span class="line">  je   __afl_fork_resume</span><br><span class="line"></span><br><span class="line">  &#x2F;* In parent process: write PID to pipe, then wait for child. </span><br><span class="line">     Parent will handle timeouts and SIGKILL the child as needed. *&#x2F;</span><br><span class="line"></span><br><span class="line">  movl  %eax, __afl_fork_pid</span><br><span class="line"></span><br><span class="line">  pushl $4              &#x2F;* length    *&#x2F;</span><br><span class="line">  pushl $__afl_fork_pid &#x2F;* data      *&#x2F;</span><br><span class="line">  pushl $199            &#x2F;* file desc *&#x2F;</span><br><span class="line">  call  write</span><br><span class="line">  addl  $12, %esp</span><br><span class="line"></span><br><span class="line">  pushl $2             &#x2F;* WUNTRACED *&#x2F;</span><br><span class="line">  pushl $__afl_temp    &#x2F;* status    *&#x2F;</span><br><span class="line">  pushl __afl_fork_pid &#x2F;* PID       *&#x2F;</span><br><span class="line">  call  waitpid</span><br><span class="line">  addl  $12, %esp</span><br><span class="line"></span><br><span class="line">  cmpl  $0, %eax</span><br><span class="line">  jle   __afl_die</span><br><span class="line"></span><br><span class="line">  &#x2F;* Relay wait status to pipe, then loop back. *&#x2F;</span><br><span class="line"></span><br><span class="line">  pushl $4          &#x2F;* length    *&#x2F;</span><br><span class="line">  pushl $__afl_temp &#x2F;* data      *&#x2F;</span><br><span class="line">  pushl $199        &#x2F;* file desc *&#x2F;</span><br><span class="line">  call  write</span><br><span class="line">  addl  $12, %esp</span><br><span class="line"></span><br><span class="line">  jmp __afl_fork_wait_loop</span><br><span class="line"></span><br><span class="line">__afl_fork_resume:</span><br><span class="line"></span><br><span class="line">  &#x2F;* In child process: close fds, resume execution. *&#x2F;</span><br><span class="line"></span><br><span class="line">  pushl $198</span><br><span class="line">  call  close</span><br><span class="line"></span><br><span class="line">  pushl $199</span><br><span class="line">  call  close</span><br></pre></td></tr></table></figure>
+
+<p>You may ask, how is the fuzz payloads delivered? They are delivered via a file(since forked processes share fds). Each new forked process will <strong>rewind the fd</strong>, so it accesses the new fuzz payloads delivered.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Isolate the process and configure standard descriptors. If out_file is</span></span><br><span class="line"><span class="comment">       specified, stdin is /dev/null; otherwise, out_fd is cloned instead. */</span></span><br><span class="line"></span><br><span class="line">    setsid();</span><br><span class="line"></span><br><span class="line">    dup2(dev_null_fd, <span class="number">1</span>);</span><br><span class="line">    dup2(dev_null_fd, <span class="number">2</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (out_file) &#123;</span><br><span class="line"></span><br><span class="line">      dup2(dev_null_fd, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line"></span><br><span class="line">      dup2(out_fd, <span class="number">0</span>);</span><br><span class="line">      close(out_fd);</span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Write modified data to file for testing. If out_file is set, the old file</span></span><br><span class="line"><span class="comment">   is unlinked and a new one is created. Otherwise, out_fd is rewound and</span></span><br><span class="line"><span class="comment">   truncated. */</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">write_to_testcase</span><span class="params">(<span class="keyword">void</span>* mem, u32 len)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  s32 fd = out_fd;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (out_file) &#123;</span><br><span class="line"></span><br><span class="line">    unlink(out_file); <span class="comment">/* Ignore errors. */</span></span><br><span class="line"></span><br><span class="line">    fd = open(out_file, O_WRONLY | O_CREAT | O_EXCL, <span class="number">0600</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (fd &lt; <span class="number">0</span>) PFATAL(<span class="string">&quot;Unable to create &#x27;%s&#x27;&quot;</span>, out_file);</span><br><span class="line"></span><br><span class="line">  &#125; <span class="keyword">else</span> lseek(fd, <span class="number">0</span>, SEEK_SET);</span><br><span class="line"></span><br><span class="line">  ck_write(fd, mem, len, out_file);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (!out_file) &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ftruncate(fd, len)) PFATAL(<span class="string">&quot;ftruncate() failed&quot;</span>);</span><br><span class="line">    lseek(fd, <span class="number">0</span>, SEEK_SET);</span><br><span class="line"></span><br><span class="line">  &#125; <span class="keyword">else</span> close(fd);</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>With fast targets, the fork server can offer considerable performance gains, usually between 1.5x and <strong>2x</strong>.</p>
+<p>Persistent mode is just forkserver mode, but each process will be fed <strong>multiple testcases</strong> before it is terminated.</p>
+<h3 id="Binary-Only-Mode"><a href="#Binary-Only-Mode" class="headerlink" title="Binary Only Mode"></a>Binary Only Mode</h3><p>In cases where source code is not available, AFL provides a binary only mode.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qemu_mode ? <span class="string">&quot;qemu &quot;</span> : <span class="string">&quot;&quot;</span>, dumb_mode ? <span class="string">&quot; dumb &quot;</span> : <span class="string">&quot;&quot;</span>,</span><br></pre></td></tr></table></figure>
+<p>which… quite obviously has significant overheads.</p>
+<p>Instead of instrumenting native code, AFL will first use QEMU’s “user emulation” to interpret native code, while AFL instruments QEMU’s intermediate representation of the code.</p>
+<p>The QEMU process is initialized then forked, in order to reduce startup overhead(quite massive). Another overhead is the translation of new(never seen before) blocks by QEMU. AFL adds the translated code to a cache, which is <strong>shared with future QEMU clones</strong> to reduce new translation attempts.</p>
+<p>As a result of these two optimizations, the overhead of the QEMU mode is roughly 2-5x.</p>
+<h2 id="WinAFL"><a href="#WinAFL" class="headerlink" title="WinAFL"></a>WinAFL</h2><p>WinAFL is a fork of AFL by ProjectZero.</p>
+<p>The original AFL project was quite *nix-centred, and can’t be used to test Windows binaries.</p>
+<p>WinAFL modifies and extends AFL to make it Windows specific.</p>
+<h3 id="Persistent-Mode"><a href="#Persistent-Mode" class="headerlink" title="Persistent Mode"></a>Persistent Mode</h3><p>WinAFL does not support forkserver mode, since Windows does not provide a “fork” system service natively.</p>
+<p>Instead, it relies heavily on Persistent Mode for speed improvements. Heavy initialization code should be performed in the main function of the harness, then a <strong>separate fuzz function</strong> is created to invoke the target. This fuzz function’s offset is fed to WinAFL, which iterates through this function for x number of times.</p>
+<p>WinAFL is designed to run 10+ to 5000(user specified) different testcases in a single process in order to match the efficiency of forkserver mode in AFL.</p>
+<p>That also means the harness needs to be clean and accurate, so <strong>not too much initialization and cleanup is done in the fuzz function</strong>, yet the target’s states stay <strong>generally clean</strong> in each iteration to not interfere with the new payload.</p>
+<h3 id="Shared-Memory-Payload-Delivery"><a href="#Shared-Memory-Payload-Delivery" class="headerlink" title="Shared Memory Payload Delivery"></a>Shared Memory Payload Delivery</h3><p>WinAFL adds the ability to share the fuzzing payload to the target program using <strong>shared memory</strong>, instead of from a file as we’ve discussed before with AFL.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> MAX_SAMPLE_SIZE 1000000</span></span><br><span class="line"></span><br><span class="line">shm_str = (<span class="keyword">char</span> *)alloc_printf(<span class="string">&quot;afl_shm_%s&quot;</span>, fuzzer_id);</span><br><span class="line"></span><br><span class="line">    shm_handle = CreateFileMapping(</span><br><span class="line">                   INVALID_HANDLE_VALUE,    <span class="comment">// use paging file</span></span><br><span class="line">                   &amp;sa,                     <span class="comment">// allow access to everyone</span></span><br><span class="line">                   PAGE_READWRITE,          <span class="comment">// read/write access</span></span><br><span class="line">                   <span class="number">0</span>,                       <span class="comment">// maximum object size (high-order DWORD)</span></span><br><span class="line">                   MAP_SIZE,                <span class="comment">// maximum object size (low-order DWORD)</span></span><br><span class="line">                   (<span class="keyword">char</span> *)shm_str);        <span class="comment">// name of mapping object</span></span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br><span class="line">&#125; <span class="keyword">else</span> <span class="keyword">if</span> (use_sample_shared_memory) &#123;        </span><br><span class="line">      <span class="comment">//this writes fuzzed data to shared memory, so that it is available to harnes program.</span></span><br><span class="line">      <span class="keyword">uint32_t</span>* size_ptr = (<span class="keyword">uint32_t</span>*)shm_sample;</span><br><span class="line">      <span class="keyword">unsigned</span> <span class="keyword">char</span>* data_ptr = shm_sample + <span class="number">4</span>;</span><br></pre></td></tr></table></figure>
+<p>First 4 bytes are size, and the following bytes are payload data.</p>
+<p>The shared memory’s name is passed to our target program to replace the initial file name arguments.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (!use_sample_shared_memory) &#123;</span><br><span class="line"> out_file = alloc_printf(<span class="string">&quot;%s\\.cur_input&quot;</span>, out_dir);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">   <span class="comment">//this sets output file as shared memory name which is used by harness program.</span></span><br><span class="line">   out_file = sample_shm_str;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>This requires us to code a harness that explicitly reads in data from a shared memory. The name of the shared memory will be passed in via AFL command line, replacing the filename argument <code>@@</code>.</p>
+<p>Shared memory is faster and can avoid some problems with files (e.g. unable to overwrite the sample file because a target maintains a lock on it). It also <strong>reduces stress on disk</strong>.</p>
+<h3 id="Dynamorio-Blackbox"><a href="#Dynamorio-Blackbox" class="headerlink" title="Dynamorio Blackbox"></a>Dynamorio Blackbox</h3><p>WinAFL uses Dynamorio to perform dynamic instrumentation(like QEMU mode in AFL).</p>
+<p>Dynamorio takes care of the persistent mode things mentioned above, as well as logging coverage.</p>
+<p>This approach has been found to introduce an overhead of about <strong>2x</strong> compared to the native execution speed, thus comparable to the original AFL in binary instrumentation mode.</p>
+<p>Another feature by Dynamorio is fuzzing an already started process by attaching to it, although I don’t see the point of that.</p>
+<h3 id="Syzygy-Instrumentation"><a href="#Syzygy-Instrumentation" class="headerlink" title="Syzygy Instrumentation"></a>Syzygy Instrumentation</h3><p>While AFL supports instrumenting source code via custom gcc, WinAFL doesn’t really support fuzzing straight from source code.</p>
+<p>It uses <code>syzygy</code> along with full PDB symbols to instrument the already compiled binary using a technique called <strong>binary rewriting</strong>. The compiled binary is taken apart, analysed, “transformed” by adding coverage code snippets and finally pieced together.</p>
+<p>Syzygy is not supported anymore, and it only works on <strong>32-bit</strong> binaries, so it’s quite useless to be frank.</p>
+<p>However, it does allow for a <strong>2-4x</strong> speed increase when compared to Dynamorio.</p>
+<h3 id="Intel-PT-Blackbox"><a href="#Intel-PT-Blackbox" class="headerlink" title="Intel PT Blackbox"></a>Intel PT Blackbox</h3><p>Instead of instrumenting the code to collect coverage, WinAFL’s Intel PT mode utilizes the <strong>Intel CPU’s trace ability</strong> to retrieve a trace of the executed instructions.</p>
+<p>The trace is compressed, written to a user-specified-size buffer, and decoded by WinAFL to obtain coverage.</p>
+<p>This is usually slower(<a target="_blank" rel="noopener" href="https://github.com/googleprojectzero/winafl/issues/231">https://github.com/googleprojectzero/winafl/issues/231</a>) than Dynamorio, depending on the size of the trace buffer specified, and requires at least <strong>Windows 10 v1809</strong> and a relatively new intel CPU. It also does not work against self modifying code.</p>
+<p>One perk is that no modification/instrumentation is required to the code, and might work in the case where neither of the other options do.</p>
+<h3 id="Custom-Functionalities"><a href="#Custom-Functionalities" class="headerlink" title="Custom Functionalities"></a>Custom Functionalities</h3><p>WinAFL is quite customizable(much more than AFL) and allows users to write their own processing DLLs.</p>
+<p>Examples include <strong>custom mutators</strong>, <strong>network fuzzing</strong> capabilities and more.</p>
+<p>Snippet below is part of a “server” dll to fuzz network clients.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">CUSTOM_SERVER_API <span class="keyword">int</span> APIENTRY <span class="title">dll_run</span><span class="params">(<span class="keyword">char</span> *data, <span class="keyword">long</span> size, <span class="keyword">int</span> fuzz_iterations)</span> </span>&#123;</span><br><span class="line">	DWORD dwThreadId;</span><br><span class="line">	test_case_struct *test_case = (test_case_struct *)<span class="built_in">malloc</span>(<span class="keyword">sizeof</span>(test_case_struct));</span><br><span class="line">	test_case-&gt;data = (<span class="keyword">char</span> *)<span class="built_in">malloc</span>(size);</span><br><span class="line"></span><br><span class="line">	<span class="built_in">memcpy</span>(test_case-&gt;data, data, size);</span><br><span class="line">	test_case-&gt;size = size;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* we have to create a second thread to avoid blocking winAFL in recv */</span></span><br><span class="line">	<span class="keyword">if</span> (hr != <span class="literal">NULL</span>)</span><br><span class="line">		WaitForSingleObject(hr, INFINITE); <span class="comment">/* we have to wait our previous thread to finish exec */</span></span><br><span class="line">	hr = CreateThread(<span class="literal">NULL</span>, <span class="number">0</span>, handle_incoming_connection, (LPVOID)test_case, <span class="number">0</span>, &amp;dwThreadId);</span><br><span class="line">	<span class="keyword">if</span> (hr == <span class="literal">NULL</span>)</span><br><span class="line">		<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* winAFL is a TCP server now (<span class="doctag">TODO:</span> implement UDP server) */</span></span><br><span class="line"><span class="function">CUSTOM_SERVER_API <span class="keyword">int</span> APIENTRY <span class="title">dll_init</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	<span class="keyword">static</span> WSADATA wsaData;</span><br><span class="line">	<span class="keyword">static</span> <span class="keyword">int</span> iResult;</span><br><span class="line">    s32 opt;</span><br><span class="line">	<span class="keyword">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">addrinfo</span> *<span class="title">result</span> =</span> <span class="literal">NULL</span>;</span><br><span class="line">	<span class="keyword">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">addrinfo</span> <span class="title">hints</span>;</span></span><br><span class="line">	<span class="keyword">static</span> <span class="keyword">int</span> iSendResult;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">static</span> <span class="keyword">int</span> first_time = <span class="number">0x1</span>;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> *server_bind_port = <span class="literal">NULL</span>;</span><br></pre></td></tr></table></figure>
+<p>By providing a custom implementation of the <code>dll_init</code> and <code>dll_run</code> functions, WinAFL can be transformed into other types of fuzzers.</p>
+<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>AFL gives off the vibes of a true hacker tool. A bunch of simple yet well engineered hacks sticking together, that is extremely practical. Every idea/functionality is implemented in a way such that it provides a nudge to the final objective, but not forcing it(unlike certain academia tools that pride themselves on high accuracy but will take forever on a production software).</p>
+<p>I believe AFL dominated the security space during its actively maintained periods(2017++). Although probably still very useful now, targets are getting more hardened and new practical research are popping up daily. A community maintained fork of AFL emerged since 2020, named <code>AFL++</code>. We will analyse its improvements from AFL in the next post.</p>
+<p><code>WinAFL</code> on the other hand sits somewhere between AFL and AFL++ on the features timeline. It provides certain enhancements to AFL, especially in terms of blackbox fuzzing, but assimilates AFL in its core designs. Unlike AFL which aims to be “simple, stupid”, I feel that WinAFL is more heavily dependent on the quality of the harness and various customizable options. Of course it can still function if you just toss a random binary at it, but that won’t come close to the effectiveness and extensibility that ProjectZero modelled it to be. WinAFL is however inferior on documentation, and you have to read the code to distinguish many of its subtle features.</p>
+<p>It is worth noting that many many more forks of AFL exists, and it’s left to the reader to explore.</p>
+<p>..</p>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
 			 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">cve</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
         		</li>
       		 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">sudo</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
         		</li>
       		
 		</ul>
 	</div>
 
-          
+      
 
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2023/01/27/fuzzing2/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/03/02/blog-update/" class="archive-article-date">
-  	<time datetime="2021-03-02T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-03-02</time>
-</a>
+<nav id="article-nav">
+  
+    <a href="/2099/11/11/prelude/" id="article-nav-newer" class="article-nav-link-wrap">
+      <i class="icon-circle-left"></i>
+      <div class="article-nav-title">
+        
+          Prelude
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2023/01/15/symex4/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">Symbolic Execution 4</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
         </div>
-    	 
+        
+        
+    </div>
+</aside>
+
+
+
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/03/02/blog-update/">Blog Update</a>
-    </h1>
+  
   
 
-        <div class="article-info info-on-right">
-          
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-  
-    </div></section>
   
 
-    
+  
+
+  
 
 
           </div>
@@ -249,8 +440,8 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
-		isArchive: true,
+		isPost: true,
+		isArchive: false,
 		isTag: false,
 		isCategory: false,
 		open_in_new: false,
