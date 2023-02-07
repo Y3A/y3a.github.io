@@ -6,15 +6,25 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>cppblog</title>
+  <title>Fuzzing 3 | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/index.html">
+  <meta name="description" content="WinAFL fuzzing in action">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Fuzzing 3">
+<meta property="og:url" content="http://example.com/2023/02/07/fuzzing3/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="WinAFL fuzzing in action">
 <meta property="og:locale" content="en_US">
+<meta property="og:image" content="http://example.com/2023/02/07/fuzzing3/res.png">
+<meta property="og:image" content="http://example.com/2023/02/07/fuzzing3/corpus1.png">
+<meta property="og:image" content="http://example.com/2023/02/07/fuzzing3/ddance.png">
+<meta property="og:image" content="http://example.com/2023/02/07/fuzzing3/slow.png">
+<meta property="article:published_time" content="2023-02-07T08:00:00.000Z">
+<meta property="article:modified_time" content="2023-02-07T13:51:22.660Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="fuzzing">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2023/02/07/fuzzing3/res.png">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
   
@@ -142,81 +152,14 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-    <article id="post-prelude" class="article article-type-post  article-index" itemscope itemprop="blogPost">
+            <article id="post-fuzzing3" class="article article-type-post " itemscope itemprop="blogPost">
   <div class="article-inner">
     
       <header class="article-header">
         
   
-    <h1 itemprop="name">
-      <a class="article-title" href="/2099/11/11/prelude/">Prelude</a>
-    </h1>
-  
-
-        
-        <a href="/2099/11/11/prelude/" class="archive-article-date">
-  	<time datetime="2099-11-11T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2099-11-11</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Purpose?</p>
-        
-          <a class="article-more-a" href="/2099/11/11/prelude/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2099/11/11/prelude/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-fuzzing3" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2023/02/07/fuzzing3/">Fuzzing 3</a>
+    <h1 class="article-title" itemprop="name">
+      Fuzzing 3
     </h1>
   
 
@@ -230,9 +173,178 @@
     <div class="article-entry" itemprop="articleBody">
       
         <p>WinAFL fuzzing in action</p>
-        
-          <a class="article-more-a" href="/2023/02/07/fuzzing3/#more">more >></a>
-        
+<span id="more"></span>
+
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>Armed with some understanding of AFL and WinAFL’s theory, we can proceed to actually use it to fuzz some toy and production binaries.</p>
+<h2 id="Build"><a href="#Build" class="headerlink" title="Build"></a>Build</h2><p>Building WinAFL is easy if you have Visual Studios. Just follow the instructions on the git repo.</p>
+<p>First build Dynamorio:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">git <span class="built_in">clone</span> https://github.com/DynamoRIO/dynamorio.git</span><br><span class="line"></span><br><span class="line"><span class="built_in">cd</span> dynamorio &amp;&amp; mkdir build &amp;&amp; <span class="built_in">cd</span> build</span><br><span class="line"></span><br><span class="line">cmake -G<span class="string">&quot;Visual Studio 17 2022&quot;</span> -A x64 ..</span><br><span class="line"></span><br><span class="line">cmake --build . --config RelWithDebInfo</span><br></pre></td></tr></table></figure>
+
+<p>Then:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">git <span class="built_in">clone</span> https://github.com/googleprojectzero/winafl.git</span><br><span class="line"><span class="built_in">cd</span> winafl</span><br><span class="line"></span><br><span class="line">git submodule update --init --recursive</span><br><span class="line"></span><br><span class="line">mkdir build64 &amp;&amp; <span class="built_in">cd</span> build64</span><br><span class="line"></span><br><span class="line">cmake -G<span class="string">&quot;Visual Studio 17 2022&quot;</span> -A x64 .. -DDynamoRIO_DIR=<span class="string">&quot;&lt;path to dynamorio cmake&gt;&quot;</span> -DINTELPT=1</span><br><span class="line"></span><br><span class="line">cmake --build . --config Release</span><br></pre></td></tr></table></figure>
+
+<p>You should find the built <code>afl-fuzz</code> binary in <code>&lt;winafl git path&gt;/build64/bin/Release</code></p>
+<p>Note: It is recommended to comment out line 238 in <code>winafl.c</code> as shown below</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">        <span class="keyword">if</span>(options.debug_mode) &#123;</span><br><span class="line">            dr_fprintf(winafl_data.<span class="built_in">log</span>, <span class="string">&quot;crashed\n&quot;</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">WriteCommandToPipe(<span class="string">&#x27;C&#x27;</span>);</span><br><span class="line">WriteDWORDCommandToPipe(exception_code);				</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//dr_exit_process(1);</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>This function kills the drrun process if it detects a crash, which is 1. redundant since the process will already “crash”, and 2. masks Windows error messages which makes debugging Dynamorio a pain</p>
+<h2 id="Test1"><a href="#Test1" class="headerlink" title="Test1"></a>Test1</h2><p>Just like in the Symbolic Execution series, let’s start off with a simple toy binary to familiarise ourselves with the arguments and intricacies of the tool.</p>
+<p>stringhelper.c:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;Windows.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function">BOOL WINAPI <span class="title">DllMain</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">    HINSTANCE hinstDLL,  <span class="comment">// handle to DLL module</span></span></span></span><br><span class="line"><span class="function"><span class="params">    DWORD fdwReason,     <span class="comment">// reason for calling function</span></span></span></span><br><span class="line"><span class="function"><span class="params">    LPVOID lpvReserved)</span>  <span class="comment">// reserved</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="comment">// Perform actions based on the reason for calling.</span></span><br><span class="line">    <span class="keyword">switch</span> (fdwReason) &#123;</span><br><span class="line">    <span class="keyword">case</span> DLL_PROCESS_ATTACH:</span><br><span class="line">        <span class="comment">// Initialize once for each new process.</span></span><br><span class="line">        <span class="comment">// Return FALSE to fail DLL load.</span></span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">case</span> DLL_THREAD_ATTACH:</span><br><span class="line">        <span class="comment">// Do thread-specific initialization.</span></span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">case</span> DLL_THREAD_DETACH:</span><br><span class="line">        <span class="comment">// Do thread-specific cleanup.</span></span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">case</span> DLL_PROCESS_DETACH:</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (lpvReserved != <span class="literal">NULL</span>) &#123;</span><br><span class="line">            <span class="keyword">break</span>; <span class="comment">// do not do cleanup if process termination scenario</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// Perform any necessary cleanup.</span></span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> TRUE;  <span class="comment">// Successful DLL_PROCESS_ATTACH.</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">__declspec(dllexport) <span class="function"><span class="keyword">char</span> *<span class="title">StringSpaceToComma</span><span class="params">(<span class="keyword">char</span> *input)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (!input)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">char</span> *cur = input; *cur; cur++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (*cur == <span class="string">&#x27; &#x27;</span>)</span><br><span class="line">            *cur = <span class="string">&#x27;,&#x27;</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (cur[<span class="number">0</span>] == <span class="string">&#x27;A&#x27;</span> &amp;&amp; cur[<span class="number">1</span>] &amp;&amp; cur[<span class="number">1</span>] == <span class="string">&#x27;B&#x27;</span> &amp;&amp; cur[<span class="number">2</span>] &amp;&amp; cur[<span class="number">2</span>] == <span class="string">&#x27;C&#x27;</span>)</span><br><span class="line">            *(<span class="keyword">int</span> *)<span class="number">0</span> = <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> input;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>This is a super simple DLL that converts spaces in a string to comma.</p>
+<p>Compile with</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cl &#x2F;LD stringhelper.c</span><br></pre></td></tr></table></figure>
+<p><em>I initially intended to model CVE-2021-3156 for a subtle heap overflow, but AFL doesn’t do well with ASAN turned on…(<a target="_blank" rel="noopener" href="https://github.com/googleprojectzero/winafl/blob/master/afl_docs/notes_for_asan.txt">https://github.com/googleprojectzero/winafl/blob/master/afl_docs/notes_for_asan.txt</a>). This required the scenario design to be slightly more wrangled, which kind of demolishes the purpose of a toy binary.</em></p>
+<p>Now we write a small harness for it</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;Windows.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdint.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdbool.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> _CRT_SECURE_NO_WARNINGS</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SAFE_LOADLIBRARY(x) (LoadLibraryA(x) ? LoadLibraryA(x) : GetModuleHandleA(<span class="meta-string">&quot;ntdll.dll&quot;</span>))</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> MAX_SAMPLE_SIZE 1000000</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SHM_SIZE (4 + MAX_SAMPLE_SIZE)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">char</span> *shm_data;</span><br><span class="line"></span><br><span class="line"><span class="keyword">bool</span> use_shared_memory;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">setup_shmem</span><span class="params">(<span class="keyword">const</span> <span class="keyword">char</span>* name)</span> </span>&#123;</span><br><span class="line">  HANDLE map_file;</span><br><span class="line"></span><br><span class="line">  map_file = OpenFileMapping(</span><br><span class="line">    FILE_MAP_ALL_ACCESS,   <span class="comment">// read/write access</span></span><br><span class="line">    FALSE,                 <span class="comment">// do not inherit the name</span></span><br><span class="line">    name);            <span class="comment">// name of mapping object</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (map_file == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="built_in">puts</span>(<span class="string">&quot;Error accessing shared memory&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  shm_data = (<span class="keyword">unsigned</span> <span class="keyword">char</span>*)MapViewOfFile(map_file, <span class="comment">// handle to map object</span></span><br><span class="line">    FILE_MAP_ALL_ACCESS,  <span class="comment">// read/write permission</span></span><br><span class="line">    <span class="number">0</span>,</span><br><span class="line">    <span class="number">0</span>,</span><br><span class="line">    SHM_SIZE);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (shm_data == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="built_in">puts</span>(<span class="string">&quot;Error accessing shared memory&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">__declspec(noinline) <span class="function"><span class="keyword">int</span> <span class="title">fuzz</span><span class="params">(<span class="keyword">char</span> *name, <span class="keyword">char</span> *(*fn)(<span class="keyword">char</span> *))</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">char</span> *sample_bytes = <span class="literal">NULL</span>;</span><br><span class="line">    <span class="keyword">uint32_t</span> sample_size = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (use_shared_memory) &#123;</span><br><span class="line">        sample_size = *(<span class="keyword">uint32_t</span> *)(shm_data);</span><br><span class="line">        <span class="keyword">if</span>(sample_size &gt; MAX_SAMPLE_SIZE) sample_size = MAX_SAMPLE_SIZE;</span><br><span class="line">        sample_bytes = (<span class="keyword">char</span> *)<span class="built_in">malloc</span>(sample_size + <span class="number">1</span>);</span><br><span class="line">        <span class="built_in">memcpy</span>(sample_bytes, shm_data + <span class="keyword">sizeof</span>(<span class="keyword">uint32_t</span>), sample_size);</span><br><span class="line">        sample_bytes[sample_size] = <span class="number">0</span>; <span class="comment">// null terminate our string for fuzz</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span> &#123;</span><br><span class="line">        FILE *fp = fopen(name, <span class="string">&quot;rb&quot;</span>);</span><br><span class="line">        <span class="keyword">if</span> (!fp) &#123;</span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;Error opening %s\n&quot;</span>, name);</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        fseek(fp, <span class="number">0</span>, SEEK_END);</span><br><span class="line">        sample_size = ftell(fp);</span><br><span class="line">        fseek(fp, <span class="number">0</span>, SEEK_SET);</span><br><span class="line">        sample_bytes = (<span class="keyword">char</span> *)<span class="built_in">malloc</span>(sample_size + <span class="number">1</span>);</span><br><span class="line">        fread(sample_bytes, <span class="number">1</span>, sample_size, fp);</span><br><span class="line">        sample_bytes[sample_size] = <span class="number">0</span>; <span class="comment">// null terminate our string for fuzz</span></span><br><span class="line">        fclose(fp);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    fn(sample_bytes);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (sample_bytes) <span class="built_in">free</span>(sample_bytes);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> **argv)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span>(argc != <span class="number">3</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;Usage: %s &lt;-f|-m&gt; &lt;file or shared memory name&gt;\n&quot;</span>, argv[<span class="number">0</span>]);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!<span class="built_in">strcmp</span>(argv[<span class="number">1</span>], <span class="string">&quot;-m&quot;</span>)) &#123;</span><br><span class="line">        use_shared_memory = <span class="literal">true</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span>(!<span class="built_in">strcmp</span>(argv[<span class="number">1</span>], <span class="string">&quot;-f&quot;</span>)) &#123;</span><br><span class="line">        use_shared_memory = <span class="literal">false</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;Usage: %s &lt;-f|-m&gt; &lt;file or shared memory name&gt;\n&quot;</span>, argv[<span class="number">0</span>]);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// map shared memory here as we don&#x27;t want to do it</span></span><br><span class="line">    <span class="comment">// for every operation</span></span><br><span class="line">    <span class="keyword">if</span>(use_shared_memory) &#123;</span><br><span class="line">        <span class="keyword">if</span>(!setup_shmem(argv[<span class="number">2</span>])) &#123;</span><br><span class="line">            <span class="built_in">puts</span>(<span class="string">&quot;Error mapping shared memory&quot;</span>);</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">char</span> *(*fn)(<span class="keyword">char</span> *) = GetProcAddress(SAFE_LOADLIBRARY(<span class="string">&quot;stringhelper.dll&quot;</span>), <span class="string">&quot;StringSpaceToComma&quot;</span>);</span><br><span class="line">    <span class="keyword">if</span> (!fn) &#123;</span><br><span class="line">        <span class="built_in">puts</span>(<span class="string">&quot;Error opening dll&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    fuzz(argv[<span class="number">2</span>], fn);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Remember how we dicussed <code>shared memory delivery</code> in the previous post? There’s no reason to not enable this feature, so I adapted <a target="_blank" rel="noopener" href="https://github.com/googleprojectzero/Jackalope/blob/6d92931b2cf614699e2a023254d5ee7e20f6e34b/test.cpp">https://github.com/googleprojectzero/Jackalope/blob/6d92931b2cf614699e2a023254d5ee7e20f6e34b/test.cpp</a> for our use case.</p>
+<p>We copy the sample data into a malloced buffer, then null terminate it to conform with our test DLL’s requirements. Of course the data might contain nulls, but it won’t jeopardise execution flow and raise false positives.</p>
+<p>Compile…</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cl harness.c</span><br></pre></td></tr></table></figure>
+
+<p>WinAFL is kind of buggy with dynamic symbols resolution so I didn’t build it with that feature(<code>-DUSE_DRSYMS=1</code>). <code>target_offset</code> can be easily resolved with a debugger or disassembler.</p>
+<h3 id="Pre-Fuzz"><a href="#Pre-Fuzz" class="headerlink" title="Pre Fuzz"></a>Pre Fuzz</h3><p>Before we fuzz, it’s nice to do a test run with <code>drrun</code> just to make sure the harness is working.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&quot;&lt;install path&gt;\drrun.exe&quot; -c &quot;&lt;install path&gt;\winafl.dll&quot; -debug -target_module harness.exe -target_offset 0x1090 -fuzz_iterations 10 -nargs 3 -- harness.exe -f a.txt</span><br></pre></td></tr></table></figure>
+
+<p>Here we specify the already built <code>winafl.dll</code> as a client library to <code>drrun</code>. We will be performing 10 dry runs against <code>harness.exe:0x1090</code> which is the offset of our <code>fuzz</code> function from the module base. <code>a.txt</code> is just a text file containing the word <code>hello</code>.</p>
+<p>NOTE: <code>target_module</code> here isn’t referring to the path of the module, but the ACTUAL NAME of the module. The same can be said for <code>coverage_module</code>. I spent at least an hour trying to debug this issue… until</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">strcmp</span>(token, <span class="string">&quot;-target_module&quot;</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">            USAGE_CHECK((i + <span class="number">1</span>) &lt; argc, <span class="string">&quot;missing module&quot;</span>);</span><br><span class="line">            <span class="built_in">strncpy</span>(options.fuzz_module, argv[++i], BUFFER_SIZE_ELEMENTS(options.fuzz_module));</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span>(_stricmp(module_name, options.fuzz_module) == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">if</span>(options.fuzz_offset) &#123;</span><br><span class="line">                to_wrap = info-&gt;start + options.fuzz_offset;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">//first try exported symbols</span></span><br><span class="line">                to_wrap = (app_pc)dr_get_proc_address(info-&gt;handle, options.fuzz_method);</span><br></pre></td></tr></table></figure>
+<p><em>Another day of hating third party things</em></p>
+<p>If all is well, a log file should be generated with the content</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Everything appears to be running normally.</span><br></pre></td></tr></table></figure>
+<p>amidst other output. That’s our green light to commence fuzzing.</p>
+<h3 id="Fuzzing"><a href="#Fuzzing" class="headerlink" title="Fuzzing"></a>Fuzzing</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&quot;&lt;install path&gt;\afl-fuzz.exe&quot; -s -i in -o out -D &quot;&lt;install path&gt;\dynamorio\build\bin64&quot; -t 5000 -- -coverage_module harness.exe -coverage_module stringhelper.dll -fuzz_iterations 5000 -target_module harness.exe -target_offset 0x1090 -nargs 3 -- harness.exe -m @@</span><br></pre></td></tr></table></figure>
+
+<p><code>-s</code> instructs WinAFL to use shared memory delivery, <code>in</code> is a directory containing our <code>a.txt</code> and <code>out</code> is an empty output directory for the results. <code>-D</code> points to Dynamorio install path and <code>-t</code> is for 5000ms timeout.</p>
+<p>We instrument both <code>harness.exe</code> and <code>stringhelper.dll</code> for coverage, and only restart the process every <code>5000</code> loops(persistent mode). WinAFL will replace <code>@@</code> with the actual shared memory/file name when it runs.</p>
+<p>Running it for a few seconds finds us almost a dozen crashes.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">                 WinAFL 1.16b based on AFL 2.43b (harness.exe)</span><br><span class="line"></span><br><span class="line">+- process timing -------------------------------------+- overall results ----+</span><br><span class="line">|        run time : 0 days, 0 hrs, 0 min, 42 sec       |  cycles done : 5     |</span><br><span class="line">|   last new path : 0 days, 0 hrs, 0 min, 1 sec        |  total paths : 56    |</span><br><span class="line">| last uniq crash : 0 days, 0 hrs, 0 min, 4 sec        | uniq crashes : 11    |</span><br><span class="line">|  last uniq hang : none seen yet                      |   uniq hangs : 0     |</span><br><span class="line">+- cycle progress --------------------+- map coverage -+----------------------+</span><br><span class="line">|  now processing : 55 (98.21%)       |    map density : 0.07% &#x2F; 0.11%        |</span><br><span class="line">| paths timed out : 0 (0.00%)         | count coverage : 1.83 bits&#x2F;tuple      |</span><br><span class="line">+- stage progress --------------------+ findings in depth --------------------+</span><br><span class="line">|  now trying : arith 8\8             | favored paths : 25 (44.64%)           |</span><br><span class="line">| stage execs : 10.3k&#x2F;74.7k (13.73%)  |  new edges on : 31 (55.36%)           |</span><br><span class="line">| total execs : 762k                  | total crashes : 149 (11 unique)       |</span><br><span class="line">|  exec speed : 20.9k&#x2F;sec             |  total tmouts : 0 (0 unique)          |</span><br><span class="line">+- fuzzing strategy yields -----------+---------------+- path geometry -------+</span><br><span class="line">|   bit flips : 4&#x2F;40.7k, 3&#x2F;40.6k, 0&#x2F;40.5k             |    levels : 6         |</span><br><span class="line">|  byte flips : 0&#x2F;5082, 0&#x2F;3541, 0&#x2F;3454                |   pending : 6         |</span><br><span class="line">| arithmetics : 0&#x2F;138k, 0&#x2F;25.4k, 0&#x2F;9088               |  pend fav : 1         |</span><br><span class="line">|  known ints : 4&#x2F;13.6k, 0&#x2F;76.6k, 0&#x2F;91.6k             | own finds : 55        |</span><br><span class="line">|  dictionary : 0&#x2F;0, 0&#x2F;0, 0&#x2F;14.5k                     |  imported : n&#x2F;a       |</span><br><span class="line">|       havoc : 53&#x2F;177k, 2&#x2F;68.6k                      | stability : 95.83%    |</span><br><span class="line">|        trim : 3.83%&#x2F;2238, 28.46%                    +-----------------------+</span><br><span class="line">^C----------------------------------------------------+   [cpu000001:   4%]</span><br></pre></td></tr></table></figure>
+
+<p>NOTE: Sometimes crashes may be perceived by AFL as hangs. This can be due to a number of reasons:</p>
+<ul>
+<li>There’s a post mortem debugger present</li>
+<li>WER is dropping crash dumps and that’s taking time</li>
+<li>Program is crashing but default timeout too short, usually comes with warnings like <code>nudge operation failed</code> because the program has exited just as WinAFL instructs <code>drconfig</code> to kill it</li>
+<li>Edge case bugs in WinAFL</li>
+</ul>
+<p>I suggest disabling all system wide error reporting softwares, as well as any JIT/post mortem debuggers.</p>
+<p>If you see too many hangs, consider increasing the timeout value.</p>
+<h3 id="Crash-Analysis"><a href="#Crash-Analysis" class="headerlink" title="Crash Analysis"></a>Crash Analysis</h3><p>AFL has two minimization tools available. <code>afl-cmin</code> minimizes the number of corpus present, by trying to group corpuses with similar tuples together(see previous post for more details). <code>afl-tmin</code> minimizes an individual testcase by removing/replacing blocks of code with 0s(again, see previous post).</p>
+<p><code>afl-cmin</code> is usually used in pre fuzzing steps. Before fuzzing an image parser for example, you may scrape the web for thousands of images as corpuses. Running <code>afl-cmin</code> on the corpuses will return a minimized set of corpuses that allows you to still exercise all tuples that the thousands would have. You can also use it to minimize testcases in <code>out\queue</code> to prepare for post fuzz coverage analysis.</p>
+<p>In our case however, we’ll use <code>afl-tmin</code>.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&quot;&lt;afl path&gt;\afl-tmin.exe&quot; -D &lt;dynamorio build path&gt;\bin64 -i &quot;out\crashes\id_000000_00_EXCEPTION_ACCESS_VIOLATION&quot; -o minimized -- -coverage_module harness.exe -coverage_module stringhelper.dll -target_module harness.exe -target_offset 0x1090 -nargs 3 -- harness.exe -f @@</span><br></pre></td></tr></table></figure>
+
+<p>The arguments are essentially identical, just change delivery method from shared memory to file.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ xxd out/crashes/id_000000_00_EXCEPTION_ACCESS_VIOLATION</span><br><span class="line">00000000: 3687 6841 3b41 4243 415e 5868 4b10 4b6c  6.hA;ABCA^XhK.Kl</span><br><span class="line"></span><br><span class="line">$ xxd minimized</span><br><span class="line">00000000: 4142 43                                  ABC</span><br></pre></td></tr></table></figure>
+
+<p>For the scope of this toy, <code>afl-tmin</code> worked like a charm, reducing the initial convoluted testcase into a concise and straightforward trigger.</p>
+<h3 id="Coverage-Analysis"><a href="#Coverage-Analysis" class="headerlink" title="Coverage Analysis"></a>Coverage Analysis</h3><p>What’s fuzzing if we don’t check coverage?</p>
+<p>If you use IDA or Binary Ninja, the <code>Lighthouse</code> <a target="_blank" rel="noopener" href="https://github.com/gaasedelen/lighthouse">https://github.com/gaasedelen/lighthouse</a> plugin is well tested and works amazingly.</p>
+<p>In the unfortunate case where you have access to neither, you can use Ghidra with the dragondance plugin <a target="_blank" rel="noopener" href="https://github.com/0ffffffffh/dragondance">https://github.com/0ffffffffh/dragondance</a></p>
+<p>First we use <code>afl-cmin</code> to compress the testcases in the <code>out\queue</code> directory. These testcases are meant to explore all paths that AFL have currently ventured.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">python &quot;&lt;winafl install path&gt;\winafl-cmin.py&quot; -i out -o minset --crash-dir minset\ --hang-dir minset\ -D &lt;dynamorio install path&gt;\build\bin64 -t 100000 -coverage_module harness.exe -coverage_module stringhelper.dll -target_module harness.exe -target_offset 0x1090 -nargs 3 -- harness.exe -f @@</span><br></pre></td></tr></table></figure>
+
+<p>This will compress all testcases into new directory <code>minset</code>, including crashes and hangs since we’re doing post fuzz analysis.</p>
+<p>We’ll run <code>drrun</code> on every testcase, generating multiple log files.</p>
+<p>To run on a specific testcase:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;dynamorio path&gt;\bin64\drrun.exe -t drcov -logdir logs -- harness.exe -f minset\id_00_id_000000</span><br></pre></td></tr></table></figure>
+
+<p>This will produce as many log files as the number of testcases you have.</p>
+<p>At time of writing, dragondance does not allow you to import a directory of log files, so we have to either add every file manually using the GUI, or merge the log files into one.</p>
+<p>I adapted <a target="_blank" rel="noopener" href="https://github.com/vanhauser-thc">https://github.com/vanhauser-thc</a> ‘s drcov-merge script for Linux such that it works for Windows.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;Windows.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;string.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> MAX_ENTRIES 128000 * 1000</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> _<span class="title">bb_entry_t</span> &#123;</span></span><br><span class="line">    DWORD start; <span class="comment">/* offset of bb start from the image base */</span></span><br><span class="line">    WORD size;</span><br><span class="line">    WORD mod_id;</span><br><span class="line">&#125; <span class="keyword">bb_entry_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> *argv[])</span> </span>&#123;</span><br><span class="line">  <span class="keyword">bb_entry_t</span> bb;</span><br><span class="line">  BYTE   *header = <span class="literal">NULL</span>, *data, *ptr, text[<span class="number">64</span>], unique = <span class="number">0</span>;</span><br><span class="line">  DWORD   header_len, idx = <span class="number">2</span>, off, s = <span class="keyword">sizeof</span>(<span class="keyword">bb_entry_t</span>), start, count, added, i;</span><br><span class="line">  DWORD   entries = <span class="number">0</span>;</span><br><span class="line">  HANDLE  cur, curmapping, out;</span><br><span class="line">  LPVOID  mapbase;</span><br><span class="line">  DWORD   cursz, written;</span><br><span class="line">  </span><br><span class="line">  <span class="keyword">if</span> (argc &gt; <span class="number">1</span> &amp;&amp; <span class="built_in">strcmp</span>(argv[<span class="number">1</span>], <span class="string">&quot;-u&quot;</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">    unique = <span class="number">1</span>;</span><br><span class="line">    argv++;</span><br><span class="line">    argc--;</span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="keyword">bb_entry_t</span> *bbs = VirtualAlloc(<span class="literal">NULL</span>, MAX_ENTRIES * <span class="keyword">sizeof</span>(<span class="keyword">bb_entry_t</span>), MEM_COMMIT, PAGE_READWRITE);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (argc &lt; <span class="number">4</span> || <span class="built_in">strncmp</span>(argv[<span class="number">1</span>], <span class="string">&quot;-h&quot;</span>, <span class="number">2</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;Syntax: %s [-u] drcov.log drcov.1,log drcov.2.log drcov.3.log ...\n&quot;</span>, argv[<span class="number">0</span>]);</span><br><span class="line">    <span class="built_in">puts</span>(<span class="string">&quot;Merges all drcov logs to the first specified filename&quot;</span>);</span><br><span class="line">    <span class="built_in">puts</span>(<span class="string">&quot;Option -u uniques the basic block information&quot;</span>);</span><br><span class="line">    VirtualFree(bbs, MAX_ENTRIES * <span class="keyword">sizeof</span>(<span class="keyword">bb_entry_t</span>), MEM_RELEASE);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> ((out = CreateFileA(argv[<span class="number">1</span>], GENERIC_READ | GENERIC_WRITE, <span class="number">0</span>, <span class="literal">NULL</span>, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, <span class="literal">NULL</span>)) == INVALID_HANDLE_VALUE) &#123;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;Error creating file : 0x%08X\n&quot;</span>, GetLastError());</span><br><span class="line">    VirtualFree(bbs, MAX_ENTRIES * <span class="keyword">sizeof</span>(<span class="keyword">bb_entry_t</span>), MEM_RELEASE);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">while</span> (idx &lt; argc) &#123;</span><br><span class="line">    <span class="keyword">if</span> ((cur = CreateFileA(argv[idx], GENERIC_READ, FILE_SHARE_READ, <span class="literal">NULL</span>, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, <span class="literal">NULL</span>)) == INVALID_HANDLE_VALUE) &#123;</span><br><span class="line">      <span class="built_in">printf</span>(<span class="string">&quot;Error opening file %s : 0x%08X\n&quot;</span>, argv[idx], GetLastError());</span><br><span class="line">      <span class="keyword">goto</span> next;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    cursz = GetFileSize(cur, <span class="literal">NULL</span>);</span><br><span class="line">    <span class="keyword">if</span> (!cursz) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;File %s is empty?&quot;</span>, argv[idx]);</span><br><span class="line">        CloseHandle(cur);</span><br><span class="line">        <span class="keyword">goto</span> next;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> ((curmapping = CreateFileMappingA(cur, <span class="literal">NULL</span>, PAGE_READONLY | SEC_COMMIT, <span class="number">0</span>, <span class="number">0</span>, <span class="string">&quot;CurMap&quot;</span>)) == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;Error creating map of file %s : 0x%08X\n&quot;</span>, argv[idx], GetLastError());</span><br><span class="line">        CloseHandle(cur);</span><br><span class="line">        <span class="keyword">goto</span> next;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> ((data= MapViewOfFile(curmapping, FILE_MAP_READ, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>)) == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;Error mapping file %s : 0x%08X\n&quot;</span>, argv[idx], GetLastError());</span><br><span class="line">        CloseHandle(curmapping);</span><br><span class="line">        CloseHandle(cur);</span><br><span class="line">        <span class="keyword">goto</span> next;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> ((ptr = <span class="built_in">strstr</span>(data, <span class="string">&quot;BB Table: &quot;</span>)) == <span class="literal">NULL</span>) &#123;</span><br><span class="line">      <span class="built_in">printf</span>(<span class="string">&quot;%s: no drcov header\n&quot;</span>, argv[idx]);</span><br><span class="line">      <span class="keyword">goto</span> unmap; </span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    off = ptr - data;</span><br><span class="line">    <span class="keyword">if</span> (!header) &#123;</span><br><span class="line">      <span class="keyword">if</span> ((header = <span class="built_in">malloc</span>(off)) == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="built_in">puts</span>(<span class="string">&quot;Malloc fail... exiting&quot;</span>);</span><br><span class="line">        UnmapViewOfFile(data);</span><br><span class="line">        CloseHandle(curmapping);</span><br><span class="line">        CloseHandle(cur);</span><br><span class="line">        CloseHandle(out);</span><br><span class="line">        VirtualFree(bbs, MAX_ENTRIES * <span class="keyword">sizeof</span>(<span class="keyword">bb_entry_t</span>), MEM_RELEASE);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="built_in">memcpy</span>(header, data, off);</span><br><span class="line">      WriteFile(out, header, off, &amp;written, <span class="literal">NULL</span>);</span><br><span class="line">      header_len = off;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="keyword">if</span> (<span class="built_in">memcmp</span>(header, data, header_len &gt; off ? header_len : off) != <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;%s: different drcov header, maybe issue?\n&quot;</span>, argv[idx]);</span><br><span class="line">        <span class="comment">//goto unmap;</span></span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (*ptr != <span class="string">&#x27;\n&#x27;</span> &amp;&amp; ptr - data &lt; cursz) ++ptr;</span><br><span class="line">    <span class="keyword">if</span> (*ptr != <span class="string">&#x27;\n&#x27;</span>)  &#123;</span><br><span class="line">      <span class="built_in">printf</span>(<span class="string">&quot;%s: no drcov header\n&quot;</span>, argv[idx]);</span><br><span class="line">      <span class="keyword">goto</span> unmap; </span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      ++ptr;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;Processing %s (%lu bytes) ... &quot;</span>, argv[idx], cursz);</span><br><span class="line">    </span><br><span class="line">    start = ptr - data;    </span><br><span class="line">    count = <span class="number">0</span>;</span><br><span class="line">    added = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (cursz - start &gt;= s) &#123;</span><br><span class="line">      <span class="keyword">int</span> found = <span class="number">0</span>;</span><br><span class="line">      <span class="keyword">if</span> (unique)</span><br><span class="line">        <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; entries &amp;&amp; !found; ++i)</span><br><span class="line">          <span class="keyword">if</span> (<span class="built_in">memcmp</span>(&amp;bbs[i], data + start, s) == <span class="number">0</span>) found = <span class="number">1</span>;</span><br><span class="line">      <span class="keyword">if</span> (!found) &#123;</span><br><span class="line">        <span class="keyword">if</span> (entries &gt;= MAX_ENTRIES) &#123;</span><br><span class="line">          <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">&quot;MapFull!\n&quot;</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">          <span class="built_in">memcpy</span>(&amp;bbs[entries++], data + start, s);</span><br><span class="line">          ++added;</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">      start += s;</span><br><span class="line">      ++count;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;%u entries, %u new\n&quot;</span>, count, added);</span><br><span class="line"></span><br><span class="line">unmap:  </span><br><span class="line">    UnmapViewOfFile(data);</span><br><span class="line">    CloseHandle(curmapping);</span><br><span class="line">    CloseHandle(cur);</span><br><span class="line"></span><br><span class="line">next:</span><br><span class="line">    ++idx;</span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">sprintf</span>(text, <span class="string">&quot;BB Table: %u bbs\n&quot;</span>, entries);</span><br><span class="line">  WriteFile(out, text, <span class="built_in">strlen</span>(text), &amp;written, <span class="literal">NULL</span>);</span><br><span class="line">  </span><br><span class="line">  <span class="built_in">printf</span>(<span class="string">&quot;Writing %u entries into %s\n&quot;</span>, entries, argv[<span class="number">1</span>]);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; entries; ++i)</span><br><span class="line">    WriteFile(out, &amp;bbs[i], s, &amp;written, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">  <span class="built_in">printf</span>(<span class="string">&quot;Done.\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">  CloseHandle(out);</span><br><span class="line">  <span class="built_in">free</span>(header);</span><br><span class="line">  VirtualFree(bbs, MAX_ENTRIES * <span class="keyword">sizeof</span>(<span class="keyword">bb_entry_t</span>), MEM_RELEASE);</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>; </span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>We can also script the whole workflow using python.</p>
+<figure class="highlight py"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> os, sys</span><br><span class="line"></span><br><span class="line"><span class="comment"># Usage: x.py &lt;testcases dir&gt; &lt;output dir&gt;</span></span><br><span class="line"><span class="comment"># Copy all testcases into testcase dir beforehands</span></span><br><span class="line"></span><br><span class="line">os.mkdir(sys.argv[<span class="number">2</span>])</span><br><span class="line"><span class="keyword">for</span> file <span class="keyword">in</span> os.listdir(sys.argv[<span class="number">1</span>]):</span><br><span class="line">    <span class="keyword">if</span> <span class="string">&quot;bitmap&quot;</span> <span class="keyword">in</span> file <span class="keyword">or</span> <span class="string">&quot;stats&quot;</span> <span class="keyword">in</span> file:</span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line">    os.system(<span class="string">fr&quot;C:\Users\chenl\Desktop\hacking\winafl\dynamorio\build\bin64\drrun.exe -t drcov -logdir <span class="subst">&#123;sys.argv[<span class="number">2</span>]&#125;</span> -- harness.exe -f <span class="subst">&#123;sys.argv[<span class="number">1</span>]&#125;</span>\\<span class="subst">&#123;file&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">os.chdir(sys.argv[<span class="number">2</span>])</span><br><span class="line">os.system(<span class="string">&quot;del /f merged.log&quot;</span>)</span><br><span class="line">os.system(<span class="string">fr&quot;C:\Users\chenl\Desktop\hacking\winafl\drcov-merge-main\drcov-merge.exe merged.log <span class="subst">&#123;<span class="string">&#x27; &#x27;</span>.join(os.listdir())&#125;</span>&quot;</span>)    </span><br></pre></td></tr></table></figure>
+
+<p>The final merged logs file will be called <code>merged.log</code>, which we can import into dragondance conveniently.</p>
+<img src="/2023/02/07/fuzzing3/res.png" class="" width="111">
+
+<p>The flow graph on the left side is our small <code>StringSpaceToComma</code> function. The darker the colour, the more times the basic block was executed.</p>
+<p>Almost all our blocks were covered, apart from the one involved in the check for a null pointer, which our harness made sure to not pass in. Neat!</p>
+<p><em>It is important to note that unlike Symbolic Execution, the goal of Fuzz Testing is not to attain maximum coverage after execution. Instead, we should be going for maximum coverage in our testcases BEFORE execution, so our mutated values can taint a larger area of code.</em></p>
+<h2 id="Test2"><a href="#Test2" class="headerlink" title="Test2"></a>Test2</h2><p>Enough with toy binaries. Let’s move on to a production software, <code>KeePassXC</code> <a target="_blank" rel="noopener" href="https://github.com/keepassxreboot/keepassxc">https://github.com/keepassxreboot/keepassxc</a></p>
+<p>KeePassXC is an open source, community driven fork of KeePass, a password manager.</p>
+<p>I chose KeePassXC as a target because it’s easy to fuzz(open source), highly used(15k stars) and quite complicated.</p>
+<p>In this post we will be fuzzing the database unlock function, which includes parsing the <code>kdbx</code> database.</p>
+<p><em>The better way to target such a program is to compile it on Linux and use AFL++, given its open source, cross platform nature. However I’m just here to have fun so WinAFL dumb mode it is.</em></p>
+<h3 id="Building"><a href="#Building" class="headerlink" title="Building"></a>Building</h3><p>Building KeePassXC from source(on Windows) is honestly painful. The docs are terrible and shit keeps happening.</p>
+<p>You can try to follow the official wiki:</p>
+<p><a target="_blank" rel="noopener" href="https://github.com/keepassxreboot/keepassxc/blob/develop/INSTALL.md">https://github.com/keepassxreboot/keepassxc/blob/develop/INSTALL.md</a></p>
+<p>and come back here if you struggle.</p>
+<p>I assume you have Visual Studios installed.</p>
+<h3 id="1-Install-ruby-and-asciidoctor"><a href="#1-Install-ruby-and-asciidoctor" class="headerlink" title="1. Install ruby and asciidoctor"></a>1. Install ruby and asciidoctor</h3><p>Install ruby and asciidoctor following instructions on <a target="_blank" rel="noopener" href="https://github.com/keepassxreboot/keepassxc/wiki/Set-up-Build-Environment-on-Windows">https://github.com/keepassxreboot/keepassxc/wiki/Set-up-Build-Environment-on-Windows</a></p>
+<p>You might face an error when running <code>gem</code>, that reports something like <code>UndefinedCoversionError</code>. </p>
+<p>Comment out the line</p>
+<figure class="highlight rb"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LOCALE = Encoding.find(Encoding.locale_charmap)</span><br></pre></td></tr></table></figure>
+<p>in <code>&lt;install path&gt;\lib\ruby\3.2.0\win32</code> and change it to</p>
+<figure class="highlight rb"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LOCALE = Encoding::UTF_8</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-Download-vcpkg"><a href="#2-Download-vcpkg" class="headerlink" title="2. Download vcpkg"></a>2. Download vcpkg</h3><p>Download and unzip the pre-built vcpkg export by following link on <a target="_blank" rel="noopener" href="https://github.com/keepassxreboot/keepassxc/wiki/Set-up-Build-Environment-on-Windows">https://github.com/keepassxreboot/keepassxc/wiki/Set-up-Build-Environment-on-Windows</a></p>
+<h3 id="3-Download-KeePassXC-source"><a href="#3-Download-KeePassXC-source" class="headerlink" title="3. Download KeePassXC source"></a>3. Download KeePassXC source</h3><p><a target="_blank" rel="noopener" href="https://keepassxc.org/download/#source">https://keepassxc.org/download/#source</a></p>
+<h3 id="4-Configure-cmake"><a href="#4-Configure-cmake" class="headerlink" title="4. Configure cmake"></a>4. Configure cmake</h3><p>Open up x64 Native Tools Command Prompt</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">mkdir build &amp;&amp; <span class="built_in">cd</span> build</span><br><span class="line"></span><br><span class="line">cmake -DWITH_XC_AUTOTYPE=OFF -DWITH_XC_ALL=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=&lt;your download path&gt;\vcpkg-export-20221023-161021\installed\x64-windows\share\cmake\Qt5\ -DCMAKE_TOOLCHAIN_FILE=&lt;your download path&gt;\vcpkg-export-20221023-161021\scripts\buildsystems\vcpkg.cmake -DCMAKE_PREFIX_PATH=&lt;your download path&gt;\vcpkg-export-20221023-161021\installed\x64-windows ..</span><br></pre></td></tr></table></figure>
+
+<p>We turn all extra features off since we’re not targeting them.</p>
+<h3 id="Harnessing"><a href="#Harnessing" class="headerlink" title="Harnessing"></a>Harnessing</h3><p>The initial plan was to load up the dll responsible for unlocking the database and extract the functions out to fuzz. Unfortunately for KeePassXC, the processing functions are compiled into the exe itself, so we can’t do that unless we fix relocations first.</p>
+<p>The good news is that KeePassXC comes with a command line version, which we can easily modify to make it a harness.</p>
+<h3 id="keepassxc-cli-database-open-flow"><a href="#keepassxc-cli-database-open-flow" class="headerlink" title="keepassxc-cli database open flow"></a>keepassxc-cli database open flow</h3><p>cli\keepassxc-cli.cpp</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span>** argv)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    <span class="function">QCoreApplication <span class="title">app</span><span class="params">(argc, argv)</span></span>;</span><br><span class="line">    QCoreApplication::setApplicationVersion(KEEPASSXC_VERSION);</span><br><span class="line"></span><br><span class="line">    Bootstrap::bootstrap();</span><br><span class="line">    Utils::setDefaultTextStreams();</span><br><span class="line">    Commands::setupCommands(<span class="literal">false</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span>&amp; out = Utils::STDOUT;</span><br><span class="line">    <span class="keyword">auto</span>&amp; err = Utils::STDERR;</span><br><span class="line"></span><br><span class="line">    QStringList arguments;</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; argc; ++i) &#123;</span><br><span class="line">        arguments &lt;&lt; QString(argv[i]);</span><br><span class="line">    &#125;</span><br><span class="line">    QCommandLineParser parser;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    QString commandName = parser.positionalArguments().at(<span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span> (commandName == <span class="string">&quot;open&quot;</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> enterInteractiveMode(arguments);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> command = Commands::getCommand(commandName);</span><br><span class="line">    <span class="keyword">if</span> (!command) &#123;</span><br><span class="line">        err &lt;&lt; QObject::tr(<span class="string">&quot;Invalid command %1.&quot;</span>).arg(commandName) &lt;&lt; <span class="built_in">endl</span>;</span><br><span class="line">        err &lt;&lt; parser.helpText();</span><br><span class="line">        <span class="keyword">return</span> EXIT_FAILURE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> exitCode;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>The cli main function initializes some QT library functions and IO streams. It then calls into <code>enterInteractiveMode</code> if we choose to <code>open</code> a database.</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">enterInteractiveMode</span><span class="params">(<span class="keyword">const</span> QStringList&amp; arguments)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">auto</span>&amp; err = Utils::STDERR;</span><br><span class="line">    <span class="comment">// Replace command list with interactive version</span></span><br><span class="line">    Commands::setupCommands(<span class="literal">true</span>);</span><br><span class="line"></span><br><span class="line">    Open openCmd;</span><br><span class="line">    <span class="function">QStringList <span class="title">openArgs</span><span class="params">(arguments)</span></span>;</span><br><span class="line">    openArgs.removeFirst();</span><br><span class="line">    <span class="keyword">if</span> (openCmd.execute(openArgs) != EXIT_SUCCESS) &#123;</span><br><span class="line">        <span class="keyword">return</span> EXIT_FAILURE;</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> EXIT_SUCCESS;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>This function initializes an <code>Open</code> class, and passes the <code>execute</code> method our arguments.</p>
+<p>Open.cpp</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">Open::execute</span><span class="params">(<span class="keyword">const</span> QStringList&amp; arguments)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    currentDatabase.reset(<span class="literal">nullptr</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">this</span>-&gt;DatabaseCommand::execute(arguments);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Just forwards the arguments to <code>DatabaseCommand::execute</code>.</p>
+<p>DatabaseCommand.cpp</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">DatabaseCommand::execute</span><span class="params">(<span class="keyword">const</span> QStringList&amp; arguments)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="function">QStringList <span class="title">amendedArgs</span><span class="params">(arguments)</span></span>;</span><br><span class="line">    <span class="keyword">if</span> (currentDatabase) &#123;</span><br><span class="line">        amendedArgs.insert(<span class="number">1</span>, currentDatabase-&gt;filePath());</span><br><span class="line">    &#125;</span><br><span class="line">    QSharedPointer&lt;QCommandLineParser&gt; parser = getCommandLineParser(amendedArgs);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (parser.isNull()) &#123;</span><br><span class="line">        <span class="keyword">return</span> EXIT_FAILURE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    QStringList args = parser-&gt;positionalArguments();</span><br><span class="line">    <span class="keyword">auto</span> db = currentDatabase;</span><br><span class="line">    <span class="keyword">if</span> (!db) &#123;</span><br><span class="line">        <span class="comment">// It would be nice to update currentDatabase here, but the CLI tests frequently</span></span><br><span class="line">        <span class="comment">// re-use Command objects to exercise non-interactive behavior. Updating the current</span></span><br><span class="line">        <span class="comment">// database confuses these tests. Because of this, we leave it up to the interactive</span></span><br><span class="line">        <span class="comment">// mode implementation in the main command loop to update currentDatabase</span></span><br><span class="line">        <span class="comment">// (see keepassxc-cli.cpp).</span></span><br><span class="line">        db = Utils::unlockDatabase(args.at(<span class="number">0</span>),</span><br><span class="line">  </span><br><span class="line">        ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Check if we already have a database open. If not pass arguments to <code>unlockDatabase</code>.</p>
+<p>Utils.cpp</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">QSharedPointer&lt;Database&gt; <span class="title">unlockDatabase</span><span class="params">(<span class="keyword">const</span> QString&amp; databaseFilename,</span></span></span><br><span class="line"><span class="function"><span class="params">                                            <span class="keyword">bool</span> isPasswordProtected,</span></span></span><br><span class="line"><span class="function"><span class="params">                                            <span class="keyword">const</span> QString&amp; keyFilename,</span></span></span><br><span class="line"><span class="function"><span class="params">                                            <span class="keyword">const</span> QString&amp; yubiKeySlot,</span></span></span><br><span class="line"><span class="function"><span class="params">                                            <span class="keyword">bool</span> quiet)</span></span></span><br><span class="line"><span class="function">    </span>&#123;</span><br><span class="line">        <span class="keyword">auto</span>&amp; err = quiet ? DEVNULL : STDERR;</span><br><span class="line">        <span class="keyword">auto</span> compositeKey = QSharedPointer&lt;CompositeKey&gt;::create();</span><br><span class="line"></span><br><span class="line">        <span class="function">QFileInfo <span class="title">dbFileInfo</span><span class="params">(databaseFilename)</span></span>;</span><br><span class="line"></span><br><span class="line">        ...</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (!dbFileInfo.isReadable()) &#123;</span><br><span class="line">            err &lt;&lt; QObject::tr(<span class="string">&quot;Failed to open database file %1: not readable&quot;</span>).arg(databaseFilename) &lt;&lt; <span class="built_in">endl</span>;</span><br><span class="line">            <span class="keyword">return</span> &#123;&#125;;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (isPasswordProtected) &#123;</span><br><span class="line">            err &lt;&lt; QObject::tr(<span class="string">&quot;Enter password to unlock %1: &quot;</span>).arg(databaseFilename) &lt;&lt; flush;</span><br><span class="line">            QString line = Utils::getPassword(quiet);</span><br><span class="line">            <span class="keyword">auto</span> passwordKey = QSharedPointer&lt;PasswordKey&gt;::create();</span><br><span class="line">            passwordKey-&gt;setPassword(line);</span><br><span class="line">            compositeKey-&gt;addKey(passwordKey);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        ...</span><br><span class="line"></span><br><span class="line">        <span class="keyword">auto</span> db = QSharedPointer&lt;Database&gt;::create();</span><br><span class="line">        QString error;</span><br><span class="line">        <span class="keyword">if</span> (db-&gt;open(databaseFilename, compositeKey, &amp;error)) &#123;</span><br><span class="line">            <span class="keyword">return</span> db;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            err &lt;&lt; error &lt;&lt; <span class="built_in">endl</span>;</span><br><span class="line">            <span class="keyword">return</span> &#123;&#125;;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>This prompts us to input a password or a key file, then invokes the core database open function.</p>
+<p>At this stage, it’s quite obvious that we can make a fuzz function that simply constructs a call to <code>db-&gt;open</code>, skipping all the abstraction.</p>
+<p>modified keepassxc-cli.cpp:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line">__declspec(noinline) <span class="function"><span class="keyword">int</span> <span class="title">fuzz</span><span class="params">(<span class="keyword">const</span> QString&amp; databaseFilename, QSharedPointer&lt;CompositeKey&gt;&amp; compositeKey, QTextStream&amp; err)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> db = QSharedPointer&lt;Database&gt;::create();</span><br><span class="line">    QString error;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">if</span> (db-&gt;open(databaseFilename, compositeKey, &amp;error)) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        err &lt;&lt; error &lt;&lt; <span class="built_in">endl</span>;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span>** argv)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (!Crypto::init()) &#123;</span><br><span class="line">        qWarning(<span class="string">&quot;Fatal error while testing the cryptographic functions:\n%s&quot;</span>, qPrintable(Crypto::errorString()));</span><br><span class="line">        <span class="keyword">return</span> EXIT_FAILURE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function">QCoreApplication <span class="title">app</span><span class="params">(argc, argv)</span></span>;</span><br><span class="line">    QCoreApplication::setApplicationVersion(KEEPASSXC_VERSION);</span><br><span class="line"></span><br><span class="line">    Utils::setDefaultTextStreams();</span><br><span class="line">    <span class="keyword">auto</span>&amp; err = Utils::STDERR;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> compositeKey = QSharedPointer&lt;CompositeKey&gt;::create();</span><br><span class="line">    <span class="keyword">auto</span> passwordKey = QSharedPointer&lt;PasswordKey&gt;::create();</span><br><span class="line">    passwordKey-&gt;setPassword(<span class="string">&quot;hello&quot;</span>);</span><br><span class="line">    compositeKey-&gt;addKey(passwordKey);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">int</span> exitCode = fuzz(QString::fromUtf8(argv[<span class="number">1</span>]), compositeKey, err);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> exitCode;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Build with:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake --build . --config Release</span><br></pre></td></tr></table></figure>
+
+<p>Now we can begin fuzzing.</p>
+<h3 id="Fuzzing-KeePassXC"><a href="#Fuzzing-KeePassXC" class="headerlink" title="Fuzzing KeePassXC"></a>Fuzzing KeePassXC</h3><p>Create 2 corpuses with the KeePassXC GUI, one version 4.0 and one version 3.1</p>
+<img src="/2023/02/07/fuzzing3/corpus1.png" class="" width="111">
+
+<p>Choose the shortest decryption time for both and set password as <code>hello</code>.</p>
+<p>Now we should have 2 kdbx files as corpuses. Each of them are 2kb large, which is alright for WinAFL.</p>
+<p>Unfortunately, running <code>drrun</code> shows an access violation in QtCore.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">00007ff8&#96;82d5f759 8b0d99422700    mov     ecx,dword ptr [Qt5Core!QAbstractDeclarativeData::setWidgetParent+0x580 (00007ff8&#96;82fd39f8)]</span><br><span class="line">00007ff8&#96;82d5f75f 65488b042558000000 mov   rax,qword ptr gs:[58h]</span><br><span class="line">00007ff8&#96;82d5f768 41b808000000    mov     r8d,8</span><br><span class="line">00007ff8&#96;82d5f76e 488b14c8        mov     rdx,qword ptr [rax+rcx*8] ds:00000000&#96;00000080&#x3D;????????????????</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>The crash happens when the program tries to access TLS. As per discussion in <a target="_blank" rel="noopener" href="https://groups.google.com/g/DynamoRIO-Users/c/cPv56eXe3t4">https://groups.google.com/g/DynamoRIO-Users/c/cPv56eXe3t4</a> , Dynamorio isn’t tested to support Windows 11.</p>
+<p>The issue is also stated by Christopher in his research <a target="_blank" rel="noopener" href="https://www.signal-labs.com/blog/fuzzing-wechats-wxam-parser#:~:text=I%20see%2C%20this%20DLL%20uses%20CRT%20(also%20thread%2Dlocal%20storage)%20%E2%80%94%20this%20causes%20issues%20with%20DynamoRIO%20(which%20I%20was%20using%20with%20WinAFL)">https://www.signal-labs.com/blog/fuzzing-wechats-wxam-parser#:~:text=I%20see%2C%20this%20DLL%20uses%20CRT%20(also%20thread%2Dlocal%20storage)%20%E2%80%94%20this%20causes%20issues%20with%20DynamoRIO%20(which%20I%20was%20using%20with%20WinAFL)</a>. , pointing out that TLS operations mess dynamorio up.</p>
+<p>At this point, I switched to Windows 10 VM to give it another try.</p>
+<h3 id="Actual-Fuzzing"><a href="#Actual-Fuzzing" class="headerlink" title="Actual Fuzzing"></a>Actual Fuzzing</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">In pre_fuzz_handler</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\qt.conf</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\qtlogging.ini</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In post_fuzz_handler</span><br><span class="line">In pre_fuzz_handler</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In post_fuzz_handler</span><br><span class="line">In pre_fuzz_handler</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In post_fuzz_handler</span><br><span class="line">In pre_fuzz_handler</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In post_fuzz_handler</span><br><span class="line">In pre_fuzz_handler</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In OpenFileW, reading \\?\C:\Users\IEUser\Desktop\keepassxc-2.7.4\build\src\cli\Release\in\corpus1.kdbx</span><br><span class="line">In post_fuzz_handler</span><br></pre></td></tr></table></figure>
+
+<p>This time <code>drrun</code> doesn’t complain.</p>
+<img src="/2023/02/07/fuzzing3/ddance.png" class="" width="111">
+
+<p>Our initial testcases also successfully exercise part of the code.</p>
+<p>Now begin actual fuzzing.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&quot;C:\Users\IEUser\Desktop\winafl\build64\bin\Release\afl-fuzz.exe&quot; -i in -o out -D C:\Users\IEUser\Desktop\dynamorio\build64\bin64 -t 50000 -- -coverage_module keepassxc-cli.exe -fuzz_iterations 5000 -target_module keepassxc-cli.exe -target_offset 0x14450 -nargs 2 -- keepassxc-cli.exe @@</span><br></pre></td></tr></table></figure>
+
+<img src="/2023/02/07/fuzzing3/slow.png" class="" width="111">
+
+<p><em>Fast forward 2 days</em></p>
+<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>Looking back at the second fuzzing exercise on KeePassXC, it’s evidently not successful.</p>
+<p>For some reason I tried to fuzz a target that performs a decryption routine… which is definitely going to be super slow.</p>
+<p>I should be digging deeper into the source code by manual analysis, and set persistent mode on the functions that perform parsing of the DB after decryption.</p>
+<p>In particular, the <code>xmlReader.readDatabase</code> method:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">KeePass2RandomStream randomStream;</span><br><span class="line">    <span class="keyword">if</span> (!randomStream.init(SymmetricCipher::Salsa20, m_protectedStreamKey)) &#123;</span><br><span class="line">        raiseError(randomStream.errorString());</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    Q_ASSERT(xmlDevice);</span><br><span class="line"></span><br><span class="line">    <span class="function">KdbxXmlReader <span class="title">xmlReader</span><span class="params">(KeePass2::FILE_VERSION_3_1)</span></span>;</span><br><span class="line">    xmlReader.readDatabase(xmlDevice, db, &amp;randomStream);</span><br></pre></td></tr></table></figure>
+<p>Since my main goal is to practise the motion of setting up fuzzing using different frameworks, I shall be forgiven this time :P</p>
+<p>(<em>Lorem ipsum dolor sit homework for the reader blah</em>)</p>
+<p>WinAFL is also not the most appropriate tool to use against an open source cross platform code. CodeQL with AFL++ should lead to more promising results in a shorter time.</p>
+<p>As for WinAFL itself… I have mixed feelings for the tool.</p>
+<p>On one hand it’s pretty easy to use and also has proven results. On the other hand… support is lacking for newer binaries and OS versions. Dynamorio is buggy on Windows 11, and syzygy is also not maintained anymore. Even the original creator released(and maintains) a newer fuzzer that is a superset of WinAFL, called <code>Jackalope</code>(<a target="_blank" rel="noopener" href="https://github.com/googleprojectzero/Jackalope">https://github.com/googleprojectzero/Jackalope</a>).</p>
+<p>Our exploration with WinAFL will end here, and future posts could be AFL++ reading, Jackalope review or snapshot fuzzing things.</p>
+<p>..</p>
+
       
 
       
@@ -254,16 +366,84 @@
       
 
       
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2023/02/07/fuzzing3/">Full Article >></a>
-        </p>
-      
 
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
+        </div>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2023/02/07/fuzzing3/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
       
       <div class="clearfix"></div>
     </div>
   </div>
 </article>
+
+  
+<nav id="article-nav">
+  
+    <a href="/2099/11/11/prelude/" id="article-nav-newer" class="article-nav-link-wrap">
+      <i class="icon-circle-left"></i>
+      <div class="article-nav-title">
+        
+          Prelude
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2023/01/27/fuzzing2/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">Fuzzing 2</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
 
 <aside class="wrap-side-operation">
     <div class="mod-side-operation">
@@ -283,648 +463,14 @@
 
 
 
-
-  
-    <article id="post-fuzzing2" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2023/01/27/fuzzing2/">Fuzzing 2</a>
-    </h1>
-  
-
-        
-        <a href="/2023/01/27/fuzzing2/" class="archive-article-date">
-  	<time datetime="2023-01-27T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-01-27</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Feature review of AFL and WinAFL</p>
-        
-          <a class="article-more-a" href="/2023/01/27/fuzzing2/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2023/01/27/fuzzing2/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-symex4" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2023/01/15/symex4/">Symbolic Execution 4</a>
-    </h1>
-  
-
-        
-        <a href="/2023/01/15/symex4/" class="archive-article-date">
-  	<time datetime="2023-01-15T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-01-15</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Analysing coverage</p>
-        
-          <a class="article-more-a" href="/2023/01/15/symex4/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">symex</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2023/01/15/symex4/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-symex3" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2022/12/29/symex3/">Symbolic Execution 3</a>
-    </h1>
-  
-
-        
-        <a href="/2022/12/29/symex3/" class="archive-article-date">
-  	<time datetime="2022-12-29T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-29</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Testing KLEE against a variety of softwares</p>
-        
-          <a class="article-more-a" href="/2022/12/29/symex3/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">symex</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2022/12/29/symex3/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-symex2" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2022/12/23/symex2/">Symbolic Execution 2</a>
-    </h1>
-  
-
-        
-        <a href="/2022/12/23/symex2/" class="archive-article-date">
-  	<time datetime="2022-12-23T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-23</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>A Review of KLEE’s internal design</p>
-        
-          <a class="article-more-a" href="/2022/12/23/symex2/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">symex</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2022/12/23/symex2/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-symex1" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2022/12/18/symex1/">Symbolic Execution 1</a>
-    </h1>
-  
-
-        
-        <a href="/2022/12/18/symex1/" class="archive-article-date">
-  	<time datetime="2022-12-18T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-18</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>High level overview of Symbolic Execution.</p>
-        
-          <a class="article-more-a" href="/2022/12/18/symex1/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">symex</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2022/12/18/symex1/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-fuzzing1" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2022/12/14/fuzzing1/">Fuzzing 1</a>
-    </h1>
-  
-
-        
-        <a href="/2022/12/14/fuzzing1/" class="archive-article-date">
-  	<time datetime="2022-12-14T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-12-14</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>A Review of Fuzzing Tools and Methods - James Fell</p>
-        
-          <a class="article-more-a" href="/2022/12/14/fuzzing1/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2022/12/14/fuzzing1/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-initial-access" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2022/11/16/initial-access/">A word on initial access</a>
-    </h1>
-  
-
-        
-        <a href="/2022/11/16/initial-access/" class="archive-article-date">
-  	<time datetime="2022-11-16T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-11-16</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>The epitome of fun</p>
-        
-          <a class="article-more-a" href="/2022/11/16/initial-access/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">redteam</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2022/11/16/initial-access/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-cve-2021-31956" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2022/09/03/cve-2021-31956/">CVE-2021-31956 exploit and analysis</a>
-    </h1>
-  
-
-        
-        <a href="/2022/09/03/cve-2021-31956/" class="archive-article-date">
-  	<time datetime="2022-09-03T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-09-03</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Exploiting a paged pool overflow on Windows 10 to get system.</p>
-        
-          <a class="article-more-a" href="/2022/09/03/cve-2021-31956/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">cve</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2022/09/03/cve-2021-31956/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
   
   
-    <nav id="page-nav">
-      <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="page-number" href="/page/3/">3</a><a class="extend next" rel="next" href="/page/2/">Next &amp;raquo;</a>
-    </nav>
+  
+
+  
+
+  
+
   
 
 
@@ -947,8 +493,8 @@
     <script>
 	var yiliaConfig = {
 		mathjax: false,
-		isHome: true,
-		isPost: false,
+		isHome: false,
+		isPost: true,
 		isArchive: false,
 		isTag: false,
 		isCategory: false,
