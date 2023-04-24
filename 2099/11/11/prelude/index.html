@@ -16,8 +16,9 @@
 <meta property="og:description" content="Purpose?">
 <meta property="og:locale" content="en_US">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
+<meta property="og:image" content="http://example.com/2099/11/11/prelude/wintnl.jpeg">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2023-04-02T15:26:31.153Z">
+<meta property="article:modified_time" content="2023-04-24T11:57:15.781Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -276,13 +277,27 @@
 <p>I also hope to reproduce and blog about some kernel CVEs soon.(After the neural network thingy!) Those are tons of fun.</p>
 <p>Compared to last year, I don’t think I’m improving as fast and reading as much. It’s slightly demoralising, I’ll try to get up to pace soon!</p>
 <p>σ(w⋅x+b).</p>
-<h2 id="2023-03-27-1"><a href="#2023-03-27-1" class="headerlink" title="2023-03-27"></a>2023-03-27</h2><p>Hello from April!</p>
+<h2 id="2023-04-02"><a href="#2023-04-02" class="headerlink" title="2023-04-02"></a>2023-04-02</h2><p>Hello from April!</p>
 <p>Just writing a quick update because it’s really late and tomorrow is a Monday again.</p>
 <p>Well unfortunately I did not commit to any of my plans written last week, including AI and CVEs and more. Instead I went to read a book called <code>Hackers and Painters</code> by Paul Graham(no regrets at all). I’m about half way through and I can absolutely declare that the high reviews really did it justice. It’s a book packed with insights and thoughts that are incredibly forward and meaningful, but at the same time easy to digest, almost like the wise old village chief holding you by your hands. The author’s predictions of the future at time of writing(2004) is so fucking(forgive me) accurate and surreal. You’ve got to see it for yourself.</p>
 <p>I know the book is supposed to spread these great ideas and startup teachings, but my most striking takeaway for now is… webapps are actually really impressive(and practical). I used to look down on web programming and felt that native clients were much better. No particular reason, just the thought of web stuff being “lame” and just a bunch of markup language together. If I had spent a little more thought on that, it would have been very obvious that my viewpoint was biased and shallow and frankly dumb. The web is such an amazing creation! and webapps+browsers are so flexible and ubiquitous we take them for granted. With my newly acquired interest for the web I started learning nextjs and typescript lol, with a goal of making a C2 client/server.</p>
 <p>Now you might think that I’m such a fickle and will surely become a jack of some trades(as <strong>they</strong> like to call me, 三脚猫), I’m a firm believer of following your interest. My rationale is: If I keep switching interests, eventually I’ll come back to one of my prior interests and build upon it. It’s like a cycle, and with enough time I’ll be able to max out all of them hahaha. Let’s see how far this one goes.</p>
 <p>Fuck that wasn’t quick at all</p>
 <p>晚安晚安!</p>
+<h2 id="2023-04-24"><a href="#2023-04-24" class="headerlink" title="2023-04-24"></a>2023-04-24</h2><p>Good morning!</p>
+<p>Daily update became weekly update and now monthly update 00, but I’ve made my life so boring that there’s nothing really new to talk about.</p>
+<p>Lost 8kg in the past 2 months as expected, and 8 more to go. Fell horribly sick a few weeks ago, which kind of made me reconsider quite some things(always happens when I’m sick).</p>
+<p>For starters I’m prioritizing health over laziness now, e.g taking fucking vitamins and sleeping early. Kind of makes sense that I should be using this body sparingly if it’s gonna last for 30 more years.</p>
+<p>I’m gonna be honest and say that the japanese learning plan is going down the drain! Haven’t touched it since mid feb. Good news is one of the co-workers is starting to learn it too, and he might give me some inspirations to continue.</p>
+<p>The ailment messed with my brain, and I lost interest in web development. Instead went back to working on my mini kernel. That turned out to be quite productive as I implemented processes threads and userland. Learnt some differences between linux and windows in that process(pun intended). In linux threads are just mini processes that share memory with each other. Internally they are all represented by a <code>task_struct</code> structure. That’s not the case in windows, where processes are just a container for threads. The kernel <code>EPROCESS</code> structure houses some administrative data like the pagetable and image name, but doesn’t actually execute anything. Each useful process must have at least one thread which is the runner of some code. As a windows fanboy of course I went with the windows ideology of things.</p>
+<p>2 weeks later I found an interesting <a target="_blank" rel="noopener" href="https://www.cvedetails.com/cve/CVE-2023-21766/">CVE</a> regarding an information leak in one of the windows minifilter driver. It’s interesting cuz information leaks are rather useful now following the <a target="_blank" rel="noopener" href="https://twitter.com/yarden_shafir/status/1644766236415258633">announcement</a> where microsoft is planning to kill the usual kaslr bypass. However I know nothing about these drivers, so I went back to working on Pavel Yosifovich’s driver programming book, hoping to learn a thing or two before analysing this cve. I’ve got it diffed out already, and it’s a race condition due improper locking, but I don’t know enough to trigger it yet.</p>
+<p>Speaking of windows internals, these books just arrived :)</p>
+<img src="/2099/11/11/prelude/wintnl.jpeg" class="">
+
+<p>The kind of gift a nerd craves during festive seasons. Reading online books just doesn’t feel the same.</p>
+<p>Lastly I subscribed to netflix yesterday to watch this film called True Spirit(it was inspiring). Little did I know it offers films based on regions, and my region has absolutely nothing. Didn’t stop me from watching 4 super old films in two days though. Netflix I’m coming for you soon.</p>
+<p>Work is starting tomorrow, hope waking up early can get me back into doing productive things.</p>
+<p>nnsask_46</p>
 
       
 
@@ -555,11 +570,11 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color2">shellcoding</a>
+                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
+                <a href="javascript:void(0)" class="js-tag color2">shellcoding</a>
               </li>
              
               <li class="article-tag-list-item">
