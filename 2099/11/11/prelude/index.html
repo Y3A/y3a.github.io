@@ -20,7 +20,7 @@
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/tds.png">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/processcb.png">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2023-06-18T15:08:39.716Z">
+<meta property="article:modified_time" content="2023-07-10T15:32:21.473Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -390,6 +390,13 @@
 <p>I’m talking quite a lot of garbage, but trust me I’m trying really hard not to jump around.</p>
 <p>Lastly, paper books smell and feel clean. I hate ebooks.</p>
 <p>struct</p>
+<h2 id="2023-07-10"><a href="#2023-07-10" class="headerlink" title="2023-07-10"></a>2023-07-10</h2><p><em>Blue July, bright July,<br>Month of storms and gorgeous blue;<br>Violet lightnings o’er thy sky,<br>Heavy falls of drenching dew;</em></p>
+<p>Hello from July! Been a busy few days without updates, lots of working and thinking about stuff.<br>With the end of my military service approaching(100+ more days) I got to find something to do afterwards.<br>Although I keep saying I’ll lie on the bed for 9 months until I get so fucking bored, I still wanna do some real things. That being said I applied for an internship for vuln research(there weren’t any official procedures I knew so just wrote an email to them), told me I need to send in a resume which I didn’t have, went to make one and now waiting for results.<br>Frankly I don’t care at all about the pay or recognition or whatever. I just want to hack on some stuff with like minded people, and it would be striking a lottery if they are willing to share experiences of working in the field. Really hope I can get in to that.</p>
+<p>The past few days were mainly consolidating my learnings on filesystem logic bugs. The techniques dated back to 2015-2020, which sounds ancient but are still very much relavent today. One thing I love about learning old techniques is that you get to see how TTPs develop over the years as these talented frontline researchers constantly push the boundary and discover cool shit. It’s really respectable.</p>
+<p>While messing around with some of those, I found a really interesting 0day scenario which I’m dying to share and ask for opinions. It’s quite confusing which party the blame should be on/should care about it. So I did the greedy move and reported to all affected parties, now still under verification. Bug bounty is pretty boring to me still. You’re not really learning anything you’re just doing the same shit over and over again on different releases of different targets. Don’t mind my analogy but I find it really resembling scam phishing clients using social media, like 电诈. You profile a bunch of targets, try to understand it and find something in the first week, and drop those without obvious bugs. By that I mean web bug bounty/filesystem low hanging fruits of course. In contrast deep dive vuln research is so much more motivating and rewarding. </p>
+<p>Also I’m reading a book called <code>寒江独钓——Windows 内核安全编程</code> which talks about windows drivers. Although it’s dated(2009) I find it really fascinating and eye opening and I have a great deal of respect for the author. It doesn’t contain the most technical details(by that I mean explanation on flags/behaviours), probably due to age, but it does have a lot of walkthroughs and extended discussions and even walkthroughs of extended discussion materials. I love books that goes on and talk about related case studies/techniques/stories. Unfortunately most authors are really lazy and “leaves it as an exercise to the reader”, but not this author. As an example he talks about attaching a filter driver to keyboard devices to sniff keystrokes, then extending to talk about how it’s easily detectable by scanning the device stack, and how else to do it(hooking the kbd-something driver’s major functions directly), how that can also be detected. Then he mentioned a case study about how QQ(chinese chat app) bought technology from the koreans on anti-sniffing techniques, and how those work, limitations of those and more rabbit hole topics. I guess it’s just a way of organising information that I appreciate, where each chapter is like research into a particular idea covering many possibilities and fun facts. Love it!</p>
+<p>Going forward I’ll continue to work on studying/writing windows drivers, hoping to learn more internals in the process. If I get an internship then I’ll go work on that. Fingers crossed!</p>
+<p>🎣</p>
 
       
 
@@ -614,11 +621,11 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color2">pkexec</a>
+                <a href="javascript:void(0)" class="js-tag color4">cve</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color4">cve</a>
+                <a href="javascript:void(0)" class="js-tag color2">pkexec</a>
               </li>
              
               <li class="article-tag-list-item">
