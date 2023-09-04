@@ -20,7 +20,7 @@
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/tds.png">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/processcb.png">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2023-08-19T02:53:29.090Z">
+<meta property="article:modified_time" content="2023-09-04T12:30:57.314Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -415,6 +415,19 @@
 <p>It’s unlike me to not talk about security, so I’ll lightly add on.</p>
 <p>A few days ago my bug got fixed by Microsoft, and I got my first CVE.<br>It’s a pretty mesmerizing experience.<br>For a bug that’s pretty useless(imo), ZDI accepted and paid promptly without questions, and Microsoft fixed it in like a week.<br>I’m starting to think Microsoft has some internal research going on that helped to elevate the bug, because from what I submitted there’s no way it’s a 7.8<br>Or maybe they issue CVEs by patches, because that patch is actually pretty huge.<br>See my blog post on it for more details.<br>Following that are all the nice things, having my name on the advisory aside to James Forshaw(really admire his work), followed by extremely talented researchers on X, a chat with one of the strongest research team’s CEO and more.<br>It’s really nice, and I like that feeling of contribution.<br>Try not to let opportunities fly by.</p>
 <p>The theme of 2023 has changed from <strong>fruitless anticipation</strong> to <strong>growth</strong>.<br>stay legal and grateful.</p>
+<h2 id="2023-09-04"><a href="#2023-09-04" class="headerlink" title="2023-09-04"></a>2023-09-04</h2><p>September.</p>
+<p>Although just less than 2 months from the end of my military conscription, I’m not nearly as happy as I previously envisioned.<br>Partly because there’s things on my back, also because I’ve learnt not to anticipate.<br>Just live everyday fully, don’t think into the future.<br>It’s my responsibility to deal with my fuck ups.</p>
+<p>On the bright side, I’m probably gonna get an opportunity to do research with industry professionals.<br>I’m really grateful and happy for the opportunity.<br>Doing the thing I enjoy, with like-minded people, and of actual value. Never experienced that before.<br>Even being inside the office and listening to people discussing security stuff behind just brings a smile to my face, idk.<br>Will definitely try my best to contribute to the team, and I’m eternally thankful for this first opportunity.</p>
+<p>August-September is a break month for me as usual.<br>The same time last year was spent on grinding 王者荣耀, this year on 永劫无间.<br>The minimal time I’ve spent learning was looking at how to interact with COM and RPC. Those turned out to be really useful.</p>
+<p>September 1st I’m back studying.<br>Coincidentally k0shl published a blog post on a Windows LPE, so I went ahead to write an exploit for that.<br>Through this I learnt 2 lessons.</p>
+<ol>
+<li><p>Don’t be daunted by fancy names. The component is called “Key Isolation in Cryptography New Generation”… something I’ll previously never look into because I know nothing about cryptography. Turns out the bug was just a textbook double API race condition. That rang a bell in me to always think like a magnifier. Although implementation level bugs are super cool, sometimes zooming out and focusing on the flow and object manegement can also net bugs. Also never judge a component by its name or perceived functionality. We are binary exploiters, and can find bugs if it is a binary. </p>
+</li>
+<li><p>Researchers have their own style, and it results in specific types of bugs. Some hook up procmon and trigger all interface/APIs. Some hunt for constructor/destructor interfaces and check for proper synchronisation. Some look for parser components and fuzz away.  I think I should be conscious of all these styles and always perform those. Like how a pentester follows a checklist, I’m starting to get a faint idea of my checklist for software bugs. Of course compared to implementation level bugs, these are all low hanging fruits. Having a proper understanding of the component is still the most important.</p>
+</li>
+</ol>
+<p>The road ahead is kind of fuzzy(no pun intended), and I guess the best thing to do is to just go ahead.<br>如果被困在雾里看不清方向，就向前多走几步。至少雾散的时候还是前进了。<br>Forgot where I saw this from, but think it makes some sense.</p>
+<p>Appreciate.</p>
 
       
 
@@ -627,15 +640,15 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">promotion</a>
-              </li>
-             
-              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">ctf</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">heap</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color5">promotion</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -695,11 +708,11 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
+                <a href="javascript:void(0)" class="js-tag color1">symex</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">symex</a>
+                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
               </li>
             
             <div class="clearfix"></div>
