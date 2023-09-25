@@ -6,14 +6,20 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>Tag: pwn | cppblog</title>
+  <title>Fuzzing 5 | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/tags/pwn/index.html">
+  <meta name="description" content="Code review of the Jackalope fuzzer">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Fuzzing 5">
+<meta property="og:url" content="http://example.com/2023/09/23/fuzzing5/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="Code review of the Jackalope fuzzer">
 <meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2023-09-23T07:00:00.000Z">
+<meta property="article:modified_time" content="2023-09-25T07:33:54.893Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="fuzzing">
+<meta property="article:tag" content="reads">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
@@ -142,304 +148,240 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-  
+            <article id="post-fuzzing5" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
     
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      Fuzzing 5
+    </h1>
+  
+
+        
+        <a href="/2023/09/23/fuzzing5/" class="archive-article-date">
+  	<time datetime="2023-09-23T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-09-23</time>
+</a>
+        
+      </header>
     
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>Code review of the Jackalope fuzzer</p>
+<span id="more"></span>
+
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>After the past month of mostly looking at CVEs, it’s time to go back to basics.</p>
+<p>This post will be an analysis and code review of the fuzzing tool - <strong>Jackalope</strong>, designed by ProjectZero as a customizable and scalable blackbox fuzzer.</p>
+<p>Let’s be honest, WinAFL and other AFL forks are quite nasty to read and modify.<br>Jackalope written in C++ offers a much cleaner codebase and greater extensibility.</p>
+<p>Another reason is because WinAFL uses Dynamorio, which is akin to a heavy rocket launcher for program instrumentation.<br>For fuzzing that’s kind of an overkill, so Jackalope is shipped with ProjectZero’s own lightweight instrumentation library, <strong>TinyInst</strong>.</p>
+<p>In this post we’ll go through the core components of a modern mutation based coverage guided fuzzer and how Jackalope implements them:</p>
+<ul>
+<li>Architecture and Extensibility</li>
+<li>Mutation Engine</li>
+<li>Delivery and Persistence</li>
+<li>Coverage and Detection</li>
+</ul>
+<h2 id="Architecture-and-Extensibility"><a href="#Architecture-and-Extensibility" class="headerlink" title="Architecture and Extensibility"></a>Architecture and Extensibility</h2><p>In the main function, a <code>Fuzzer</code> object is expected to be instantiated with its <code>Run()</code> method invoked.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Fuzzer* fuzzer;</span><br><span class="line">fuzzer = <span class="keyword">new</span> CustomFuzzer(grammar);</span><br><span class="line">fuzzer-&gt;Run(argc, argv);</span><br></pre></td></tr></table></figure>
+<p><code>CustomFuzzer</code> is an arbitrary user defined child class of <code>Fuzzer</code>.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">CustomFuzzer</span> :</span> <span class="keyword">public</span> Fuzzer &#123;</span><br><span class="line">  <span class="function">Mutator *<span class="title">CreateMutator</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> **argv, ThreadContext *tc)</span> <span class="keyword">override</span></span>;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function">Mutator *<span class="title">CustomFuzzer::CreateMutator</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> **argv, ThreadContext *tc)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>Fuzzer</code> exposes several virtual methods for the child to override, such as <code>CreateMutator()</code> which allows custom mutator configuration.<br>As a generic fuzzer we can instantiate a <strong>probabilistic mutator</strong> that allows specifying the probability at which each specific mutator is triggered:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">PSelectMutator *pselect = <span class="keyword">new</span> PSelectMutator();</span><br><span class="line"></span><br><span class="line"><span class="comment">// select one of the mutators below with corresponding</span></span><br><span class="line"><span class="comment">// probablilities</span></span><br><span class="line">pselect-&gt;AddMutator(<span class="keyword">new</span> ByteFlipMutator(), <span class="number">0.8</span>);</span><br><span class="line">pselect-&gt;AddMutator(<span class="keyword">new</span> ArithmeticMutator(), <span class="number">0.2</span>);</span><br><span class="line">pselect-&gt;AddMutator(<span class="keyword">new</span> AppendMutator(<span class="number">1</span>, <span class="number">128</span>), <span class="number">0.2</span>);</span><br><span class="line">pselect-&gt;AddMutator(<span class="keyword">new</span> BlockInsertMutator(<span class="number">1</span>, <span class="number">128</span>), <span class="number">0.1</span>);</span><br><span class="line">pselect-&gt;AddMutator(<span class="keyword">new</span> BlockFlipMutator(<span class="number">2</span>, <span class="number">16</span>), <span class="number">0.1</span>);</span><br><span class="line">pselect-&gt;AddMutator(<span class="keyword">new</span> BlockFlipMutator(<span class="number">16</span>, <span class="number">64</span>), <span class="number">0.1</span>);</span><br><span class="line">pselect-&gt;AddMutator(<span class="keyword">new</span> BlockFlipMutator(<span class="number">1</span>, <span class="number">64</span>, <span class="literal">true</span>), <span class="number">0.1</span>);</span><br><span class="line">pselect-&gt;AddMutator(<span class="keyword">new</span> BlockDuplicateMutator(<span class="number">1</span>, <span class="number">128</span>, <span class="number">1</span>, <span class="number">8</span>), <span class="number">0.1</span>);</span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> pselect;</span><br></pre></td></tr></table></figure>
+<p>The above <code>PSelectMutator</code> is in fact a child class of <code>Mutator</code>, which we can again override to enable custom mutation.</p>
+<p>For example in order to achieve j00ru’s <a target="_blank" rel="noopener" href="https://www.blackhat.com/docs/eu-16/materials/eu-16-Jurczyk-Effective-File-Format-Fuzzing-Thoughts-Techniques-And-Results.pdf">idea</a> of having a dedicated mutation probability for each section of a file, we can easily override <code>CreateMutator()</code> to create a <code>PSelectMutator</code> for each section, and override <code>Mutate()</code> to fragmentize each sample into the relevant sections before delegating the call to the respective <code>PSelectMutator-&gt;Mutate()</code>.</p>
+<p>Similar principal is applied to other components like <strong>Sample Delivery</strong> and <strong>Instrumentation</strong>(yes most instrumentation methods are virtual so you can extend to use custom instrumentation).</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Instrumentation</span> &#123;</span></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">virtual</span> ~Instrumentation() &#123; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="keyword">void</span> <span class="title">Init</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> **argv)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> RunResult <span class="title">Run</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> **argv, <span class="keyword">uint32_t</span> init_timeout, <span class="keyword">uint32_t</span> timeout)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> RunResult <span class="title">RunWithCrashAnalysis</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span>** argv, <span class="keyword">uint32_t</span> init_timeout, <span class="keyword">uint32_t</span> timeout)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> Run(argc, argv, init_timeout, timeout);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="keyword">void</span> <span class="title">CleanTarget</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="keyword">bool</span> <span class="title">HasNewCoverage</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="keyword">void</span> <span class="title">GetCoverage</span><span class="params">(Coverage &amp;coverage, <span class="keyword">bool</span> clear_coverage)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="keyword">void</span> <span class="title">ClearCoverage</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="keyword">void</span> <span class="title">IgnoreCoverage</span><span class="params">(Coverage &amp;coverage)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="built_in">std</span>::<span class="built_in">string</span> <span class="title">GetCrashName</span><span class="params">()</span> </span>&#123; <span class="keyword">return</span> <span class="string">&quot;crash&quot;</span>; &#125;;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="keyword">uint64_t</span> <span class="title">GetReturnValue</span><span class="params">()</span> </span>&#123; <span class="keyword">return</span> <span class="number">0</span>; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="built_in">std</span>::<span class="built_in">string</span> <span class="title">AnonymizeAddress</span><span class="params">(<span class="keyword">void</span>* addr)</span></span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>Jackalope supports two modes: <strong>server/client</strong> mode for synchronisation across machines, as well as <strong>local multithreaded</strong> mode.<br>For the purpose of this article I’ll focus on the latter.</p>
+<p>The main fuzzer thread starts <code>n</code> number of worker threads:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt;= num_threads; i++) &#123;</span><br><span class="line">  ThreadContext *tc = CreateThreadContext(argc, argv, i);</span><br><span class="line">  CreateThread(StartFuzzThread, tc);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Each worker thread waits for a job, which can either be to process a sample or run a sample:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">Fuzzer::RunFuzzerThread</span><span class="params">(ThreadContext *tc)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">    FuzzerJob job;</span><br><span class="line"></span><br><span class="line">    SynchronizeAndGetJob(tc, &amp;job);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">switch</span> (job.type) &#123;</span><br><span class="line">    <span class="keyword">case</span> WAIT:</span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> defined(WIN32) || defined(_WIN32) || defined(__WIN32)</span></span><br><span class="line">      Sleep(<span class="number">1000</span>);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">else</span></span></span><br><span class="line">      usleep(<span class="number">1000000</span>);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> PROCESS_SAMPLE:</span><br><span class="line">      ProcessSample(tc, &amp;job);</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> FUZZ:</span><br><span class="line">      FuzzJob(tc, &amp;job);</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">      FATAL(<span class="string">&quot;Unknown job type&quot;</span>);</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    JobDone(&amp;job);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>ProcessSample()</code> attempts to run the input corpus once to see if it behaves badly without mutation.<br>Doesn’t seem too useful.</p>
+<p><code>FuzzJob()</code> tries to mutate each testcase fully and run it through the target.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">  Sample mutated_sample = *entry-&gt;sample;</span><br><span class="line">  <span class="keyword">if</span> (!tc-&gt;mutator-&gt;Mutate(&amp;mutated_sample, tc-&gt;prng, tc-&gt;all_samples_local)) <span class="keyword">break</span>;</span><br><span class="line">  <span class="keyword">if</span> (mutated_sample.size &gt; Sample::max_size) &#123;</span><br><span class="line">    <span class="keyword">continue</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">int</span> has_new_coverage;</span><br><span class="line">  RunResult result = RunSample(tc, &amp;mutated_sample, &amp;has_new_coverage, <span class="literal">true</span>, <span class="literal">true</span>, init_timeout, timeout, entry-&gt;sample);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>It will also update the stats table that’s be displayed by the main thread.</p>
+<p>Details regarding the run is covered below under <strong>Delivery and Persistence</strong>.</p>
+<h2 id="Mutation-Engine"><a href="#Mutation-Engine" class="headerlink" title="Mutation Engine"></a>Mutation Engine</h2><p>Jackalope comes with a <strong>probabilistic mutator</strong> and several common mutators like <strong>byte flip</strong>, <strong>block duplicate</strong>, <strong>append and splice</strong>.<br>Interestingly it doesn’t come with a <strong>bit flip</strong> mutator, maybe that’s less worthy to deploy empirically.</p>
+<p><code>PSelectMutator</code> has an interesting algorithm:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">double</span> p = prng-&gt;RandReal() * psum;</span><br><span class="line"><span class="keyword">double</span> sum = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; child_mutators.size(); i++) &#123;</span><br><span class="line">  sum += probabilities[i];</span><br><span class="line">  <span class="keyword">if</span> ((p &lt; sum) || (i == (child_mutators.size() - <span class="number">1</span>))) &#123;</span><br><span class="line">    last_mutator_index = i;</span><br><span class="line">    Mutator *current_mutator = child_mutators[i];</span><br><span class="line">    <span class="keyword">return</span> current_mutator-&gt;Mutate(inout_sample, prng, all_samples);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>It converts each user specified weight into an amalgamated absolute percentage, then generates a random percentage to compare with.</p>
+<p>Apart from this there’s nothing much to talk about.<br>Mutation is meant to be customized anyways.</p>
+<h2 id="Delivery-and-Persistence"><a href="#Delivery-and-Persistence" class="headerlink" title="Delivery and Persistence"></a>Delivery and Persistence</h2><p>The functionality required to run the target process with a testcase is fully implemented by <strong>TinyInst</strong>, hence the fuzzer just needs to call the API:</p>
+<p><strong>Fuzzer::FuzzJob()</strong></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">RunResult result = RunSample(tc, &amp;mutated_sample, &amp;has_new_coverage, <span class="literal">true</span>, <span class="literal">true</span>, init_timeout, timeout, entry-&gt;sample);</span><br></pre></td></tr></table></figure>
+<p><strong>Fuzzer::RunSample()</strong></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">RunResult result = RunSampleAndGetCoverage(tc, sample, &amp;initialCoverage, init_timeout, timeout);</span><br></pre></td></tr></table></figure>
+<p><strong>Fuzzer::RunSampleAndGetCoverage()</strong></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">RunResult result = tc-&gt;instrumentation-&gt;Run(tc-&gt;target_argc, tc-&gt;target_argv, init_timeout, timeout);</span><br><span class="line">tc-&gt;instrumentation-&gt;GetCoverage(*coverage, <span class="literal">true</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// save crashes and hangs immediately when they are detected</span></span><br><span class="line"><span class="keyword">if</span> (result == CRASH) &#123;</span><br><span class="line">  <span class="built_in">string</span> crash_desc = tc-&gt;instrumentation-&gt;GetCrashName();</span><br></pre></td></tr></table></figure>
+<p>The above functions are just delegating the call to the lowest layer <code>Run()</code> method implemented by each instrumentation engine.</p>
+<p><strong>TinyInstInstrumentation::Run()</strong></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">RunResult <span class="title">TinyInstInstrumentation::Run</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> **argv, <span class="keyword">uint32_t</span> init_timeout, <span class="keyword">uint32_t</span> timeout)</span> </span>&#123;</span><br><span class="line">  DebuggerStatus status;</span><br><span class="line">  RunResult ret = OTHER_ERROR;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (instrumentation-&gt;IsTargetFunctionDefined()) &#123;</span><br><span class="line">    <span class="keyword">if</span> (cur_iteration == num_iterations) &#123;</span><br><span class="line">      instrumentation-&gt;Kill();</span><br><span class="line">      cur_iteration = <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// else clear only when the target function is reached</span></span><br><span class="line">  <span class="keyword">if</span> (!instrumentation-&gt;IsTargetFunctionDefined()) &#123;</span><br><span class="line">    instrumentation-&gt;ClearCoverage();</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">uint32_t</span> timeout1 = timeout;</span><br><span class="line">  <span class="keyword">if</span> (instrumentation-&gt;IsTargetFunctionDefined()) &#123;</span><br><span class="line">    timeout1 = init_timeout;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (instrumentation-&gt;IsTargetAlive() &amp;&amp; persist) &#123;</span><br><span class="line">    status = instrumentation-&gt;Continue(timeout1);</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    instrumentation-&gt;Kill();</span><br><span class="line">    cur_iteration = <span class="number">0</span>;</span><br><span class="line">    status = instrumentation-&gt;Run(argc, argv, timeout1);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// if target function is defined,</span></span><br><span class="line">  <span class="comment">// we should wait until it is hit</span></span><br><span class="line">  <span class="keyword">if</span> (instrumentation-&gt;IsTargetFunctionDefined()) &#123;</span><br><span class="line">    <span class="keyword">if</span> (status != DEBUGGER_TARGET_START) &#123;</span><br><span class="line">      <span class="comment">// try again with a clean process</span></span><br><span class="line">      WARN(<span class="string">&quot;Target function not reached, retrying with a clean process\n&quot;</span>);</span><br><span class="line">      instrumentation-&gt;Kill();</span><br><span class="line">      cur_iteration = <span class="number">0</span>;</span><br><span class="line">      status = instrumentation-&gt;Run(argc, argv, init_timeout);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (status != DEBUGGER_TARGET_START) &#123;</span><br><span class="line">      <span class="keyword">switch</span> (status) &#123;</span><br><span class="line">      <span class="keyword">case</span> DEBUGGER_CRASHED:</span><br><span class="line">        FATAL(<span class="string">&quot;Process crashed before reaching the target method\n&quot;</span>);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">      <span class="keyword">case</span> DEBUGGER_HANGED:</span><br><span class="line">        FATAL(<span class="string">&quot;Process hanged before reaching the target method\n&quot;</span>);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">      <span class="keyword">case</span> DEBUGGER_PROCESS_EXIT:</span><br><span class="line">        FATAL(<span class="string">&quot;Process exited before reaching the target method\n&quot;</span>);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">      <span class="keyword">default</span>:</span><br><span class="line">        FATAL(<span class="string">&quot;An unknown problem occured before reaching the target method\n&quot;</span>);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    instrumentation-&gt;ClearCoverage();</span><br><span class="line"></span><br><span class="line">    status = instrumentation-&gt;Continue(timeout);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">switch</span> (status) &#123;</span><br><span class="line">  <span class="keyword">case</span> DEBUGGER_CRASHED:</span><br><span class="line">    ret = CRASH;</span><br><span class="line">    instrumentation-&gt;Kill();</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">  <span class="keyword">case</span> DEBUGGER_HANGED:</span><br><span class="line">    ret = HANG;</span><br><span class="line">    instrumentation-&gt;Kill();</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">  <span class="keyword">case</span> DEBUGGER_PROCESS_EXIT:</span><br><span class="line">    ret = OK;</span><br><span class="line">    <span class="keyword">if</span> (instrumentation-&gt;IsTargetFunctionDefined()) &#123;</span><br><span class="line">      WARN(<span class="string">&quot;Process exit during target function\n&quot;</span>);</span><br><span class="line">      ret = HANG;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">  <span class="keyword">case</span> DEBUGGER_TARGET_END:</span><br><span class="line">    <span class="keyword">if</span> (instrumentation-&gt;IsTargetFunctionDefined()) &#123;</span><br><span class="line">      ret = OK;</span><br><span class="line">      cur_iteration++;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      FATAL(<span class="string">&quot;Unexpected status received from the debugger\n&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">  <span class="keyword">default</span>:</span><br><span class="line">    FATAL(<span class="string">&quot;Unexpected status received from the debugger\n&quot;</span>);</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>This is a manager to call into the actual <strong>Run()</strong> function residing in TinyInst.<br>In persistent mode, it first checks if the process needs to be restarted because the maximum number of iterations has been hit.<br>Otherwise, it tries to continue the process if it is already running, or start it if it isn’t.</p>
+<p>This works because TinyInst adds breakpoints to the target function in persistent mode.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// called when a module gets loaded</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">Debugger::OnModuleLoaded</span><span class="params">(<span class="keyword">void</span> *<span class="keyword">module</span>, <span class="keyword">char</span> *module_name)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// printf(&quot;In on_module_loaded, name: %s, base: %p\n&quot;, module_name, module_info.lpBaseOfDll);</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (target_function_defined &amp;&amp; _stricmp(module_name, target_module.c_str()) == <span class="number">0</span>) &#123;</span><br><span class="line">    target_address = GetTargetAddress((HMODULE)<span class="keyword">module</span>);</span><br><span class="line">    <span class="keyword">if</span> (!target_address) &#123;</span><br><span class="line">      FATAL(<span class="string">&quot;Error determining target method address\n&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    AddBreakpoint(target_address, BREAKPOINT_TARGET);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Upon hitting the target function, it saves the arguments and overwrites the return address to generate an exception when the function ends.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// called when the target method is reached</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">Debugger::HandleTargetReachedInternal</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="comment">// printf(&quot;in OnTargetMethod\n&quot;);</span></span><br><span class="line"></span><br><span class="line">  SIZE_T numrw = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  saved_sp = (<span class="keyword">void</span> *)GetRegister(RSP);</span><br><span class="line"></span><br><span class="line">  saved_return_address = <span class="number">0</span>;</span><br><span class="line">  ReadProcessMemory(child_handle, saved_sp, &amp;saved_return_address, child_ptr_size, &amp;numrw);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (loop_mode) &#123;</span><br><span class="line">    GetFunctionArguments(saved_args, target_num_args, (<span class="keyword">uint64_t</span>)saved_sp, calling_convention);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// todo store any target-specific additional context here</span></span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// modify the return address on the stack so that an exception is triggered</span></span><br><span class="line">  <span class="comment">// when the target function finishes executing</span></span><br><span class="line">  <span class="comment">// another option would be to allocate a block of executable memory</span></span><br><span class="line">  <span class="comment">// and point return address over there, but this is quicker</span></span><br><span class="line">  <span class="keyword">size_t</span> return_address = PERSIST_END_EXCEPTION;</span><br><span class="line">  WriteProcessMemory(child_handle, saved_sp, &amp;return_address, child_ptr_size, &amp;numrw);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>This exception will be caught, notifying TinyInst that the target function has ended.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> EXCEPTION_ACCESS_VIOLATION: &#123;</span><br><span class="line">  <span class="keyword">if</span> (target_function_defined &amp;&amp; </span><br><span class="line">     ((<span class="keyword">size_t</span>)exception_record-&gt;ExceptionAddress == PERSIST_END_EXCEPTION))</span><br><span class="line">  &#123;</span><br><span class="line">    <span class="keyword">if</span> (trace_debug_events) <span class="built_in">printf</span>(<span class="string">&quot;Debugger: Persistence method ended\n&quot;</span>);</span><br><span class="line">    HandleTargetEnded();</span><br><span class="line">    <span class="keyword">return</span> DEBUGGER_TARGET_END;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+<p>In persistent(loop) mode, it restores the arguments and sets the instruction pointer back to the start of target function</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// called every time the target method returns</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">Debugger::HandleTargetEnded</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="comment">// printf(&quot;in OnTargetMethodEnded\n&quot;);</span></span><br><span class="line"></span><br><span class="line">  target_return_value = GetRegister(RAX);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (loop_mode) &#123;</span><br><span class="line">    <span class="comment">// restore params</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// Writing to lcContext directly to avoid calling </span></span><br><span class="line">    <span class="comment">// SetThreadContext multiple times.</span></span><br><span class="line">    <span class="comment">// We don&#x27;t need to RetrieveThreadContext() as it was done in </span></span><br><span class="line">    <span class="comment">// GetRegister() above and we don&#x27;t need to SetThreadContext</span></span><br><span class="line">    <span class="comment">// as it will be called by SetFunctionArguments below</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> _WIN64</span></span><br><span class="line">    lcContext.Rip = (<span class="keyword">size_t</span>)target_address;</span><br><span class="line">    lcContext.Rsp = (<span class="keyword">size_t</span>)saved_sp;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">else</span></span></span><br><span class="line">    lcContext.Eip = (<span class="keyword">size_t</span>)target_address;</span><br><span class="line">    lcContext.Esp = (<span class="keyword">size_t</span>)saved_sp;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// restore return address as it might have been overwritten by instrumentation</span></span><br><span class="line">    SIZE_T numrw = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">size_t</span> return_address = PERSIST_END_EXCEPTION;</span><br><span class="line">    WriteProcessMemory(child_handle, saved_sp, &amp;return_address, child_ptr_size, &amp;numrw);</span><br><span class="line"></span><br><span class="line">    SetFunctionArguments(saved_args, target_num_args, (<span class="keyword">uint64_t</span>)saved_sp, calling_convention);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// todo restore any target-specific additional context here</span></span><br><span class="line"></span><br><span class="line">  &#125; <span class="keyword">else</span> &#123; <span class="comment">/*  loop_mode == false */</span></span><br><span class="line"></span><br><span class="line">    SetRegister(RIP, (<span class="keyword">size_t</span>)saved_return_address);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// restore target entry breakpoint</span></span><br><span class="line">    <span class="comment">// note that this time, the breakpoint address might be</span></span><br><span class="line">    <span class="comment">// in instrumented code</span></span><br><span class="line">    <span class="comment">// so we need to use translated address</span></span><br><span class="line">    AddBreakpoint((<span class="keyword">void</span> *)GetTranslatedAddress((<span class="keyword">size_t</span>)target_address),</span><br><span class="line">                  BREAKPOINT_TARGET);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>This explains why the run manager in Jackalope can repeatedly attempt to <code>Continue()</code> the target.</p>
+<h2 id="Coverage-and-Detection"><a href="#Coverage-and-Detection" class="headerlink" title="Coverage and Detection"></a>Coverage and Detection</h2><p>Coverage data is also kindly provided by TinyInst APIs.</p>
+<p>On initialization, TinyInst marks all code segments of the instrumented module as unexecutable and copies the code elsewhere in memory.<br>Therefore whenever code in the module is exercised, an exception is raised and TinyInst catches that.<br>TinyInst then tries to instrument all basic blocks reachable via direct jumps from the initially exercised code by modifying the copied code recursively, then redirecting control flow to the copied code.<br>This is to prevent further exceptions in the current code path, since exception handling is expensive.</p>
+<h3 id="Edge-Coverage"><a href="#Edge-Coverage" class="headerlink" title="Edge Coverage"></a>Edge Coverage</h3><p>Edge instrumentation is achieved by adding a <code>mov</code> statement that sets an index in the coverage bytemap.</p>
+<p>First a <strong>coverage code</strong> unique for each edge is generated:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">uint64_t</span> <span class="title">LiteCov::GetEdgeCode</span><span class="params">(ModuleInfo *<span class="keyword">module</span>, <span class="keyword">size_t</span> edge_address1,</span></span></span><br><span class="line"><span class="function"><span class="params">                              <span class="keyword">size_t</span> edge_address2)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">uint64_t</span> offset1 = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">if</span> (edge_address1)</span><br><span class="line">    offset1 = ((<span class="keyword">uint64_t</span>)edge_address1 - (<span class="keyword">uint64_t</span>)<span class="keyword">module</span>-&gt;min_address);</span><br><span class="line">  <span class="keyword">uint64_t</span> offset2 = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">if</span> (edge_address2)</span><br><span class="line">    offset2 = ((<span class="keyword">uint64_t</span>)edge_address2 - (<span class="keyword">uint64_t</span>)<span class="keyword">module</span>-&gt;min_address);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> ((offset1 &lt;&lt; <span class="number">32</span>) + (offset2 &amp; <span class="number">0xFFFFFFFF</span>));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>The hash table <strong>buf_to_coverage</strong> is used to map the bytemap index to coverage code:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">data-&gt;buf_to_coverage[data-&gt;coverage_buffer_next] = coverage_code;</span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br><span class="line"><span class="keyword">size_t</span> bit_address =</span><br><span class="line">    (<span class="keyword">size_t</span>)data-&gt;coverage_buffer_remote + data-&gt;coverage_buffer_next;</span><br><span class="line"><span class="keyword">size_t</span> mov_address = GetCurrentInstrumentedAddress(<span class="keyword">module</span>);</span><br><span class="line">data-&gt;coverage_buffer_next++;</span><br><span class="line"></span><br><span class="line">EmitCoverageInstrumentation(<span class="keyword">module</span>, bit_address, mov_address);</span><br></pre></td></tr></table></figure>
+<p>Finally the assembly instruction is written to the copied code.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">LiteCov::EmitCoverageInstrumentation</span><span class="params">(ModuleInfo *<span class="keyword">module</span>,</span></span></span><br><span class="line"><span class="function"><span class="params">                                          <span class="keyword">size_t</span> bit_address,</span></span></span><br><span class="line"><span class="function"><span class="params">                                          <span class="keyword">size_t</span> mov_address)</span> </span>&#123;</span><br><span class="line">  <span class="comment">//////////////////////////////////////////////////</span></span><br><span class="line">  <span class="comment">// mov [coverage_buffer + coverage_buffer_next], 1</span></span><br><span class="line">  <span class="comment">//////////////////////////////////////////////////</span></span><br><span class="line">  WriteCode(<span class="keyword">module</span>, MOV_ADDR_1, <span class="keyword">sizeof</span>(MOV_ADDR_1));</span><br><span class="line">  mov_address += <span class="keyword">sizeof</span>(MOV_ADDR_1);</span><br></pre></td></tr></table></figure>
+
+<p>When the bytemap is retrieved, it’s decoded using the <strong>buf_to_coverage</strong> table, and the resulting coverage codes are written to disk as coverage.</p>
+<p>On Jackalope’s end it simply calls the API to run/get coverage:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">RunResult result = tc-&gt;instrumentation-&gt;Run(tc-&gt;target_argc, tc-&gt;target_argv, init_timeout, timeout);</span><br><span class="line">tc-&gt;instrumentation-&gt;GetCoverage(*coverage, <span class="literal">true</span>);</span><br></pre></td></tr></table></figure>
+<p>If the result is a crash or hang, it’s logged immediately to disk.<br>Otherwise, a check is performed to see if new coverage was generated.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">CoverageDifference(tc-&gt;thread_coverage, initialCoverage, new_thread_coverage);</span><br><span class="line"><span class="keyword">if</span>(new_thread_coverage.empty()) <span class="keyword">return</span> result;</span><br></pre></td></tr></table></figure>
+<p>Mutated samples that result in new coverage is saved to disk and added to a <code>priority queue</code>, prioritizing samples that have most recently contributed to new coverage.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">std</span>::<span class="built_in">priority_queue</span>&lt;SampleQueueEntry *, <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;SampleQueueEntry *&gt;, CmpEntryPtrs&gt; sample_queue;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Conclusion"><a href="#Conclusion" class="headerlink" title="Conclusion"></a>Conclusion</h2><p>A mutation based coverage guided fuzzer is really straightforward.<br>All you need is an instrumentation framework, a mutator and a detector.</p>
+<p>The instrumentation approach can either be static(compile time like <strong>afl-as</strong> or binary level like <strong>pe-afl</strong>) or dynamic(<strong>Dynamorio</strong>, <strong>PIN</strong>, <strong>TinyInst</strong>), and it will be the most challenging to implement.</p>
+<p>The remaining is just a dumb fuzzer.</p>
+<p>If you want to implement a fuzzer from scratch, start with a dumb one first!</p>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
       
       
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2022" class="archive-year">2022</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2022/04/25/HEVD-Stack/" class="archive-article-date">
-  	<time datetime="2022-04-25T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2022-04-25</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2022/04/25/HEVD-Stack/">Windows Kernel Driver Exploitation - 1</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
 			 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
         		</li>
       		 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
         		</li>
       		
 		</ul>
 	</div>
 
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
       
-        </div></section>
+
       
+
       
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2021" class="archive-year">2021</a>
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/12/23/orw-rop/" class="archive-article-date">
-  	<time datetime="2021-12-23T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-12-23</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/12/23/orw-rop/">Linux Heap Exploitation - ORW ROP</a>
-    </h1>
-  
+      </div>
+    </span>
+  </div>
+</div>
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">heap</a>
-        		</li>
-      		
-		</ul>
-	</div>
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2023/09/23/fuzzing5/" alt="微信分享二维码">
+    </div>
+</div>
 
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/11/27/house-of-pie/" class="archive-article-date">
-  	<time datetime="2021-11-27T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-11-27</time>
-</a>
+<nav id="article-nav">
+  
+    <a href="/2099/11/11/prelude/" id="article-nav-newer" class="article-nav-link-wrap">
+      <i class="icon-circle-left"></i>
+      <div class="article-nav-title">
+        
+          Prelude
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2023/08/24/cve-2023-35359/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">CVE-2023-35359 analysis</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
         </div>
-    	 
+        
+        
+    </div>
+</aside>
+
+
+
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/11/27/house-of-pie/">Linux Heap Exploitation - House of Pie</a>
-    </h1>
+  
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">heap</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/07/07/htb-rope2/" class="archive-article-date">
-  	<time datetime="2021-07-07T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-07-07</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/07/07/htb-rope2/">HackTheBox Rope2 - Part1</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">HTB</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">browser</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">v8</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/06/11/hxpctf-kernelrop/" class="archive-article-date">
-  	<time datetime="2021-06-11T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-06-11</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/06/11/hxpctf-kernelrop/">hxpctf 2020 pwn challenge</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">ctf</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2021/04/17/ctf-sg-heap-fengshui/" class="archive-article-date">
-  	<time datetime="2021-04-17T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2021-04-17</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2021/04/17/ctf-sg-heap-fengshui/">CTF.SG pwn challenge</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">pwn</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">ctf</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">heap</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-  
-    </div></section>
-  
-
-    
 
 
           </div>
@@ -462,9 +404,9 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
+		isPost: true,
 		isArchive: false,
-		isTag: true,
+		isTag: false,
 		isCategory: false,
 		open_in_new: false,
 		toc_hide_index: true,
