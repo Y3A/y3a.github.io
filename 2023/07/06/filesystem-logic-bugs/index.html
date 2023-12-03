@@ -20,7 +20,7 @@
 <meta property="og:image" content="http://example.com/2023/07/06/filesystem-logic-bugs/csymlink.png">
 <meta property="og:image" content="http://example.com/2023/07/06/filesystem-logic-bugs/userdir.png">
 <meta property="article:published_time" content="2023-07-06T07:00:00.000Z">
-<meta property="article:modified_time" content="2023-07-12T09:08:16.488Z">
+<meta property="article:modified_time" content="2023-12-03T14:10:26.605Z">
 <meta property="article:author" content="cp">
 <meta property="article:tag" content="windows">
 <meta name="twitter:card" content="summary">
@@ -236,7 +236,7 @@
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">operation: CreateFile</span><br><span class="line">details: Delete On Close</span><br></pre></td></tr></table></figure>
 
 <p>These should help you catch all file deletion traces in ProcMon.</p>
-<h3 id="Example-2-File-move-to-arbitrary-write"><a href="#Example-2-File-move-to-arbitrary-write" class="headerlink" title="Example 2: File move to arbitrary write"></a>Example 2: File move to arbitrary write</h3><p>An interesting case study I’ve read somewhere was regarding a file move to LPE.<br>When an operation such as <code>move C:\secure\vuln\a.txt c:\secure\vuln\a.txt.bak</code> occurs, we can junction <code>vuln</code> to <code>\RPC Control\</code>, symlink <code>a.txt</code> to some payload and<code>a.txt.bak</code> to a service binary.<br>When the move is executed our payload will be moved to replace the service binary.</p>
+<h3 id="Example-2-File-move-to-arbitrary-write"><a href="#Example-2-File-move-to-arbitrary-write" class="headerlink" title="Example 2: File move to arbitrary write"></a>Example 2: File move to arbitrary write</h3><p>An interesting case study I’ve read somewhere was regarding a file move to LPE.<br>When an operation such as <code>move C:\secure\vuln\a.txt c:\secure\vuln\a.txt.bak</code> occurs, we can junction <code>vuln</code> to <code>\RPC Control\</code>, symlink <code>a.txt</code> to some payload and <code>a.txt.bak</code> to a service binary.<br>When the move is executed our payload will be moved to replace the service binary.<br>The <code>move</code> command(and similar API/utils) show up as <code>SetRenameInformationFile</code> in procmon, so that’s something to look for if you’re hunting.</p>
 <p>This case study shows the flexibility and creativeness of a chained setup when exploiting logic bugs.<br>Have a file move where the target is not controllable but readable? Use the same logic for an arbitrary read.</p>
 <h3 id="Conclusion-1"><a href="#Conclusion-1" class="headerlink" title="Conclusion"></a>Conclusion</h3><p>File write is even easier to exploit, just overwrite an obscure dll/service binary and get system.<br>File read is target dependent. Think of ways where the target can transmit the data.<br>Just as an example, if we exploit a driver for arbitrary read and the driver sends it to a usermode client, we can open a handle to the client and read its memory for the data.<br>Folder creation can be exploited for permanent DOS by creating the folder <code>C:\Windows\System32\cng.sys</code> as mentioned in the zdi blog above.</p>
 <h3 id="Gotcha"><a href="#Gotcha" class="headerlink" title="Gotcha"></a>Gotcha</h3><p>Since a certain Windows 10 build in mid 2022(I don’t remember the exact build number), Microsoft shipped a mitigation called <code>RedirectionTrust Policy</code>, which when enforced prevents a process from following junctions created by non-admin users.<br>As of mid 2023 now it seems like only <code>msiexec.exe</code>(windows installer) enforces it. This killed off quite a lot of bugs in installers.<br>I wrote a small <a target="_blank" rel="noopener" href="https://github.com/Y3A/someredthings/tree/main/get_redirectiontrust_policy">tool</a> to query for this policy.</p>
@@ -488,15 +488,15 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
           <ul class="article-tag-list" q-show="showTags">
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color4">pwn</a>
-              </li>
-             
-              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color3">windows</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color2">kernel</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">pwn</a>
               </li>
              
               <li class="article-tag-list-item">
