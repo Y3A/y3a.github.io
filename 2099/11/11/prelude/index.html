@@ -20,7 +20,7 @@
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/tds.png">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/processcb.png">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2023-11-21T14:23:30.241Z">
+<meta property="article:modified_time" content="2023-12-27T14:40:07.893Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -457,6 +457,14 @@
 <h2 id="2023-11-21"><a href="#2023-11-21" class="headerlink" title="2023-11-21"></a>2023-11-21</h2><p>好吧 i lied。并没有按照上周写的按部就班手动审计。因为看了<a target="_blank" rel="noopener" href="https://googleprojectzero.blogspot.com/2020/07/mms-exploit-part-2-effective-fuzzing-qmage.html">p0</a>的博客觉得说得很有道理。在面对一个完全陌生的format并没有源码的时候，硬逆并不明智。</p>
 <p>然后就开始写fuzz。我目前fuzz的思路很简单。首先你没fuzz前就得先预想一下大概会出什么样的洞在什么操作，并有针对性的fuzz。能接上instrumentation就一定要接。不能的话就用一些程序本身的校验函数来生成输入，这点能避免很多无效的mutation。至于怎么mutate其实没那么重要。接下来就是corpus的问题。能抓多少抓多少，然后一并简化了用。如果网上没有就自己生成。这里注意熵值能拉多高就拉多高，生成的时候支持的选项全给填上，最好逆一逆看看有没有undocumented的也填上。最后就是trigger了。也是熵怎么高怎么来。先逆一逆收集一下所有支持的交互功能，然后跟sample有关的都随机调用。多开几个线程还能顺便fuzz条件竞争。fuzz的时候开一开page heap或special pool基本就行了。跟Mateusz Jurczyk学的一招就是别写死。既然fuzz本质上就是靠随机，那尽量在fuzzer里面也多加一点随机的逻辑。比如某个目标函数运行特别慢不适合fuzz，那也别完全拿掉，写成小概率会运行。</p>
 <p>目前出了几个oob和dos，期待继续深入。<br>S = k ln Ω</p>
+<h2 id="2023-12-26"><a href="#2023-12-26" class="headerlink" title="2023-12-26"></a>2023-12-26</h2><p>Exactly one year ago I started this Prelude section, and I’m not regretting it at all. It’s always nice to have some kind of record to look back to and say “hey i’ve gone so far”, and give yourself a pat on the back.</p>
+<p>Looking back at my resolutions, I can proudly say I achieved all… but two. I intended to learn japanese but realised that I couldn’t focus on two things at once. In the end I picked security and that’s fine. Another goal was to master c++, but I realised that c++ just feels bad to write. That being said I’ve learnt enough to navigate around decompiled c++, and I can code it slowly if necessary. Wouldn’t call it a win, but I respect my choice. In January, I knew nothing about fuzzing, can’t reverse engineer shit, have no idea what is a  driver and was uncertain on whether to do red teaming or web or binary, on Windows or Linux or whatever. I had no experience finding bugs, found none and only could follow well documented trails of others. Now I’m employed to do security research, have some kernel 0days, a little intuition on how to hunt and a custom fuzzer. The point I’m trying to prove is a year is a long time, and your goals may not be as far away as you think.</p>
+<p>Another thing is luck. I’m never saying stuff to maintain a humble image on this section. Everything is raw and real. I am extremely lucky to end up in this position I am now. I’m so lucky I think I might have used up my luck in the future few years. If you read the previous months’ posts you’ll get a sense of how lucky I was. It prompts me to believe in the parallel universe theory, where some me in another universe experiences the bad luck I’ve avoided. I’m really sorry for that. The takeaway here is: things can always take a turn for the worse, and there’s no end to how horrific it can get. Please be thankful of what’s present in this moment, don’t anticipate too far into the future, and accept that sufferings are always going to come and you will deal with it, like all the other people that have dealt with their share of sufferings. It may or may not be your fault, but it’s your responsibility to deal with it for yourself. Please don’t fall into the mentality that someone or something will appear to make stuff better!</p>
+<p>In June I said:</p>
+<p><em>I also have this image of a perfect future, where a few friends and I stay at a cosy apartment, do some security research/ctfs and play sports daily.</em></p>
+<p>Now I have some amazing friends in the company, and we do security research and play table tennis daily.</p>
+<p>Life has never been better, and I’m super grateful to be alive. As for the future, resolutions of 2024 will come soon.</p>
+<p>Thank you 2023.<br>Happy-go-lucky</p>
 
       
 
@@ -669,15 +677,15 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">promotion</a>
-              </li>
-             
-              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">ctf</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">heap</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color5">promotion</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -733,11 +741,11 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color2">shellcoding</a>
+                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
+                <a href="javascript:void(0)" class="js-tag color2">shellcoding</a>
               </li>
              
               <li class="article-tag-list-item">
