@@ -23,7 +23,7 @@
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/foldersexample.png">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/vtableinmemory.png">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2024-03-17T08:11:39.171Z">
+<meta property="article:modified_time" content="2024-03-18T15:29:31.605Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -536,11 +536,18 @@
 <p>Although we did not include this <code>Derived_vtbl</code> anywhere in the <code>Derived</code> struct, it will automagically be identified by IDA.</p>
 <p>If we are inheriting from two base classes and overriding the vtable for the second base class, we’ll create another structure <code>CLASSNAME_0008_vtbl</code>, because the second base class’s vtable is at offset 0x8.</p>
 <p>That’s all :)</p>
-<h2 id="2024-03-17"><a href="#2024-03-17" class="headerlink" title="2024-03-17"></a>2024-03-17</h2><p>March<br>Don’t have any good news this time! Just some happenings that I can’t talk too detailed.</p>
+<h2 id="2024-03-13"><a href="#2024-03-13" class="headerlink" title="2024-03-13"></a>2024-03-13</h2><p>March<br>Don’t have any good news this time! Just some happenings that I can’t talk too detailed.</p>
 <p>Yesterday p2o registrations closed, and I did not manage to come up with an entry in time. It kind of sucks that I can’t contribute to my team, but I’ve figured out the reasons along the way. The problem is about switching targets. I switch targets too much, for reasons partially my own and partially uncontrollable. Maybe two months ago I said I was gonna work on <redacted>.sys. Well I switched like 4 targets since then, and that’s a terrible idea. One lesson learnt, deep diving produces results and switching around does not. Around less than 2 weeks left to registration I started opening random drivers in IDA to throw at the fuzzer and look for dumb bugs. Result was 2 dumb bugs but both were not good enough for the competition. Maybe I’ll submit them soon to msrc. Now it’s time to really slow down and deep dive at a target. I could be focusing on finding new attack surfaces, like some unused features that are just on the edge of the bounty scope, but I don’t find that cool. I’d prefer to focus on something many eyes have looked on, and enjoy the rigour of finding stuff others have looked but not seen.</p>
 <p>The patch tuesday was a bummer too, for reasons I can’t say. Also microsoft is getting more brute at patching, also for reasons I can’t say. Aside of that pretty surprised Naceri is working in microsoft now. All I recall is him shitting on them and dropping 0days. His work was great inspiration to me though, and I wish him the best in his new role. The old gods of logic bugs: Forshaw Naceri PolarBear. </p>
 <p>clfs and cldflt hasn’t been pwned for 2 months already. I bet you teams are stocking up for p2o. Baddest drivers of 2023. I’m pretty excited for the games, it’s the most involved I’ve been and will definitely be a good learning opportunity. </p>
 <p>Recently I’ve been thinking a lot about methodology and note taking. Not note taking for knowledge, but bug hunting oriented notes taking. I’m certain the top researchers don’t do everything in their brains. They must have some specific methodology of noting down things. Unfortunately I don’t have the connections to ask around. Almost all my time were spent on coming up with and experimenting with different formats, different methodologies, different ways to abstract code to make it easier for the brain to mix and match.  Feels kind of like coming up with a new martial art. You’ve got to be willing to give up your existing moves, give it the time, start slow maybe against some dummy targets, and build up familiarity. Success may not come soon but it will come eventually.</p>
+<h2 id="2024-03-18"><a href="#2024-03-18" class="headerlink" title="2024-03-18"></a>2024-03-18</h2><p>记</p>
+<p>此情可待成追忆 只是当时已惘然<br>0318是个特殊的日子 是某手游分服纪念日 借此回忆一下青春</p>
+<p>1617年无拘无束 喜欢在住校的凌晨和室友翻出去夜跑 拿钢管把围栏敲的震天响并在门卫赶来的时候溜回宿舍 整天处在极度亢奋的状态 半年被叫了五次家长 也亲手把三天没睡的同学送上过救护车 这种傻逼的事情大概只有那时候能做出来。再后来就长大了 明白和高层达成共识才能被赋予特权 小人物瞎蹦哒终究要被崩</p>
+<p>1819年势如破竹 在某手游线下赛连续两年全国冠军后疯狂接单代打爆金币。1v1没那么多限制 直播暴打过职业选手 也登过全球榜一 被LGD邀请过打职业 拒了 后面给其他队做了一段时间分析师 也认识了一群巨吊的网友 是至今最聊得来的一群人 也是社交最快乐的一段时间。可人总是在没学会珍惜的时候被给予太多的关系 到今天也只和一个人维持着联系 大概不可能再体验那种难以形容的陪伴了。这段经历的影响最深刻 以至于做什么事都想上榜 到顶尖 追求刺激 以及肾上腺素。还有对找回类似团队陪伴的一丝期望。</p>
+<p>2021年众星捧月 在某平台翻唱小火了后点赞时不时破千 体验到了每天消息99+的忙碌 打开手机就是满屏的夸赞 点开信箱就是要加v。被捧着的感觉真的会上瘾。后面有粉丝自愿组了粉丝群 第一次体会到什么都不做大家都会围着你转 发什么都会有人支持的感觉。爽是真的爽 但越被捧着越容易焦虑 越担心摔了 越喜欢自省 越畏手畏脚 意识到了大i当小网红没那么开心。当时的性格是不适合运营这个身份的 自我怀疑的某一天把群都删了 注销了账号 权当回忆。其实根本没必要 一个人要是特别欣赏你放屁都是香的 他要是不欣赏你也懒得鸟你。所以现在主打自信 只要自己清楚意识自己几斤几两 在别人面前就可以绝对自信</p>
+<p>我不会维持关系 每段经历都串联不起来也带不到下一段 就像进了不同人的身体里体验了三段不同的生活 到如今什么也带不来。我记性也很差 要不是翻出旧照 甚至要怀疑是不是凭空臆想出的。但有一个片段在我脑海里特别深刻。18年春节 在房里听着全民舒又的翻唱 和送佬打友谊赛 客厅里老爸和爷爷在噶三湖 妈妈刚炸好糯米丸子叫我快出来吃饭 我说别急 别急。</p>
+<p>没啥意思 纯记录 大伙儿当我吹牛逼就好<br>如果真要有什么收获 那就请全力珍惜身边的关系和人 尽量带进下一段人生</p>
 
       
 
@@ -817,11 +824,11 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
+                <a href="javascript:void(0)" class="js-tag color2">shellcoding</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color2">shellcoding</a>
+                <a href="javascript:void(0)" class="js-tag color5">sudo</a>
               </li>
              
               <li class="article-tag-list-item">
