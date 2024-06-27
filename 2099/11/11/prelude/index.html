@@ -26,7 +26,7 @@
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/tracing_undef.png">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/defined.png">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2024-06-27T12:22:15.561Z">
+<meta property="article:modified_time" content="2024-06-27T15:54:08.039Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -577,6 +577,18 @@
 <p>I’m really a weak individual in terms of mental strength. A bit of lasting pain is enough to get me all sad and lose the willpower to get out of the bed and do anything. Honestly full respects to those in chronic pain or disabilities. I won’t be able to stay strong for sure. Sometimes I wonder how I’ll be like if I lose my eyes or my legs. It’s a dangerous thought exercise that always leaves me in despair. On the other hand, is anything really a problem if you’re fit and healthy? It isn’t. You healthy folks should feel empowered as you are.</p>
 <p>When I don’t reflect on myself I reflect on security stuff. Do you face a similar problem? You think a lot, read a lot, have some thoughts and ideas, have a methodology/framework derived from logical reasoning, but it’s not working as well as planned. You might think it’s because the methodology is flawed or your reasoning is wrong, but listen it might be because you’re not FOLLOWING it. Sometimes you come up with a methodology after days of trying and tweaking and thinking, and you’ve not fully internalized it yet. You got to re-read your thoughts as a whole, from the beginning, with a fresh mind. Then you can work on really understanding the core of the methodology. Sometimes you do understand the methodology, but you are a lazy person by nature and you always hope to rush to easy results. You hope to do the least work possible and pray for success. You believe you can skip certain steps or quickly go over them, or give up some options. When the results are not promising, you start doubting your methodology that’s estabilished through logic and reasoning. That’s a dumb thing to do, because you didn’t even follow it fully. You’ve got to acknowledge the core of the methodology and know which steps you should instead spend extra effort on, because doing those steps actually correlate directly to finding bugs(in a superficial way). Ask yourself if you even understand your notes, and the bug patterns you’ve seen. It’s a difference between having knowledge and internalizing knowledge, and applying knowledge.</p>
 <p>Gonna take a break, make a trip to the US for holiday, and hope to be back soon.(sorry boss!)</p>
+<h2 id="2024-06-27"><a href="#2024-06-27" class="headerlink" title="2024-06-27"></a>2024-06-27</h2><p>谈一谈挖漏洞的技术分解。<br>在有了基础漏洞原理知识后可以做的定向提升：</p>
+<ol>
+<li><p>多做nday分析并记录漏洞原理。同样的漏洞规律可以出现在不同的平台，不同的部件，不同的函数。比如是否能一眼看出以下的操作有问题？</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">OBJECT_ATTRIBUTES oa = &#123;..., OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE, ...&#125;;</span><br><span class="line">ZwCreateKey(..., &amp;oa, L“HKLM\\DoesntExist1\\DoesntExist2”, ...)</span><br></pre></td></tr></table></figure></li>
+<li><p>找别人没看过却又有攻击意义的部件。比如很难交互或需要通过好几层调用，或环境难搭或难调试的部件，或复杂的协议。又或者鲜为人知存在但确实存在的部件。</p>
+</li>
+<li><p>选择了部件后，找各种部件能与可控数据交互的点。越能找到别人找不到的交互点，越好发现漏洞。一切数据类漏洞都是解析可控数据导致的。这部分的进阶还包括专注于发掘与测试可控数据熵值高的交互点。</p>
+</li>
+<li><p>除了数据类漏洞还有state类漏洞。这就需要专注于可控数据能改变state的操作，然后封装成一个个控制函数，比如Free(), Reset()。这和挖数据类漏洞是不同的思路。你不再关心数据是如何被解析，而是专注于如何用数据造成可控的state变化。</p>
+</li>
+</ol>
+<p>如果你觉得自己掌握了漏洞知识却无法挖出漏洞，不妨试一试往这几个方向努力。</p>
 
       
 
@@ -841,15 +853,15 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">activedirectory</a>
+              </li>
+             
+              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">prompteng</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">injection</a>
-              </li>
-             
-              <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">activedirectory</a>
               </li>
              
               <li class="article-tag-list-item">
