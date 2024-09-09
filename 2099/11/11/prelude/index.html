@@ -26,7 +26,7 @@
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/tracing_undef.png">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/defined.png">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2024-08-22T15:24:54.524Z">
+<meta property="article:modified_time" content="2024-09-09T14:16:20.090Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -608,6 +608,14 @@
 <p>Wukong launched on the 20th. I’ve been waiting for the game since day 1, August of 2020. That was the year I matriculated into fucking high school, to put things into perspective. The game is pretty fun mechanically, but the moves do get repetitive after a while. Although there are many different combat styles, you get used to one and it’s hard to switch over, unless you feel like grinding the same boss 10 times to get used to it. Maybe I’m bad? Also there’s no map so it’s easy to get lost. It’s probably intended for the player to spend time exploring and take the journey slowly, but beating the minions don’t feel rewarding due to the repetitive mechanics mentioned. I’m also bad at figuring out which path I’ve taken, so I would appreciate a marker to make things less taxing for the mind. The storyline is interesting and has lots of lore. But the plot of “searching” for things feel less rewarding after a while(personally). The goal is not reinforced and I don’t feel a strong sense of purpose anymore. Also there are some bosses that have absolutely nothing to do with the plot, and again I don’t feel rewarded beating them. Writing this I realized the problem. I’m expecting so much satisfaction from the game, and it’s just too much for a video game. Seems like I’m fucked over by anticipation once again.</p>
 <p>Another event is matriculating into university. This isn’t eventful because I didn’t go to any orientations or clubs or hostel. So I’m just tuning in to lessons and heading home. Super disconnected from the school. That makes the university a big time waster. The main reason to pursue a degree is parental pressure, and the only saving grace to convince myself is maybe I could make some friends. I should start working towards that though. Right now I’m just wasting time and money doing math. I don’t recognize the utility of traditional tertiary education in my field of work. I’m also trying to escape from parental pressure in any form. Realistically they don’t know better and they just want to feel like they do. Just hoping to attain work life balance while doing something I recognize as purposeful.</p>
 <p>As usual I’ve some thoughts regarding vr. Recently I’m more aware of my concentration level/effeciency everyday. I can differentiate when I’m doing conscious and directed research vs just wasting the time away clicking stuff. As much I enjoy these stuff, it’s not easy to attain many hours of directed research. Especially when there’s no tangible output and you’re just understanding stuff. You’d be tempted to do shallow research on another target. It’s important to acknowledge that there are targets of varying difficulty level even on the same platform. The target you choose should really depend on your end goal. Take Windows for example, a functionality based service/driver is much easier to manually audit than a filesystem driver. If your goal is to achieve LPE and both are of the same value, it’s only reasonable to steer away from the filesystem driver(or fuzz it and call it a day). This is part of target selection and it’s a very underrated bit of wisdom, I personally feel is more important than auditing skills. Try to choose the most obscure, edge, unheard of component that still satisfies the goal. You see the best hunters on msrc always RCEing obscure non-default protocols, that’s the reason. They’re playing smart within the rules. On the other hand if your goal is to find a crazy bug in a core subsystem, you’ve got to manage expectations. It’s probable to go half a year without output. Can you take that? More importantly can you still be committed to do directed research daily under such conditions(lack of the “shell” high). Personally I’ll try to work on target selection.</p>
+<h2 id="2024-09-09"><a href="#2024-09-09" class="headerlink" title="2024-09-09"></a>2024-09-09</h2><p>九月<br>做漏洞挖掘九个月了，感悟是越来越深。关于技法，关于思路。</p>
+<p>近一个月最大的收获就是对独立安全研究整个流程认知的提升。细节上面还一无所知，但能朦胧感应到那个状态，以及粗略了解没挖之前要做什么，挖的时候要看什么 ，挖到了之后要怎么拓展。在分析了cve-2023-21674之后能具象化的理解同桌曾说过的“一个漏洞打多个”这个概念。也赞同他说的认知问题。漏洞挖掘绝对是个认知活。安全研究行业没有人会跟你细细说思路，说细节。细节都在脑子里，在私人笔记里，用来换钱。认知只能通过猜测和实验来提高。看talk，看ppt，看博客，看漏洞报告，分析nday，看大佬挖的部件走向。我经常用这些公开资源来尝试猜测大佬的思维。基本上每个月我的心法都会经历翻天覆地的改变。因为在实验了过后发现这些猜想不能说不合理，但是无法高效挖漏洞，所以不正确。随着总结出来的缺陷和更多的资源，又可以摸索出新的心法，周而复始。所以我之前发的博客关于心法和思路的部分请辩证地看待，毕竟这是一个个人成长记录博客。其实有很多词大家说出来的意思都不一样。比如“攻击面”。当你无法理解大佬们为什么一直强调某些名词的时候，可能是认知出现了问题，要及时改正。</p>
+<p>发点干货。<br>我这个月能给出的最有价值的忠告就是：</p>
+<ol>
+<li>多分析nday</li>
+<li>认知问题是无法通过思考弥补的，需要多上手多实践多抄袭多总结。包括多分析nday</li>
+</ol>
+<p>每天进步一点，梦想不再遥远.</p>
 
       
 
@@ -884,15 +892,15 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">symex</a>
-              </li>
-             
-              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color2">shellcoding</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">sudo</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">symex</a>
               </li>
             
             <div class="clearfix"></div>
