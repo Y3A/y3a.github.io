@@ -26,7 +26,7 @@
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/tracing_undef.png">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/defined.png">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2024-09-16T11:27:49.403Z">
+<meta property="article:modified_time" content="2024-09-19T11:32:19.593Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -617,6 +617,14 @@
 </ol>
 <p>每天进步一点，梦想不再遥远.</p>
 <h2 id="2024-09-16"><a href="#2024-09-16" class="headerlink" title="2024-09-16"></a>2024-09-16</h2><p>Attempting to formularize creative work is already heading in a wrong direction!</p>
+<h2 id="2024-09-19"><a href="#2024-09-19" class="headerlink" title="2024-09-19"></a>2024-09-19</h2><p>黑盒审计应该要做到逆审分离。步骤应该是逆向-&gt;理解-&gt;审计。</p>
+<p>打第一个目标的时候逆也不会逆，逆的乱七八糟。也没想着理解，纯粹用眼找oob，啥也没找到，最后上了fuzzer瞎几把fuzz出了一波。出了洞也不会做变体分析，暴殄天物。</p>
+<p>打第二个目标的时候时间紧迫，目标偏偏又是闭源格式，不用说了自然是没收获。不知道在干什么，选了那么傻逼的目标。按照现在的理解肯定找个功能性驱动打了。</p>
+<p>打第三个目标的时候会逆了，但是没做到逆审分离。这目标已经出过很多洞，我也预料到了它未来漏洞的走势，但是逆的时候又想着找找漏洞，边逆变找。这只适合找low hanging fruit，而且会拖延逆向速度。结果就是花了一个月还没逆到我觉得会出洞的地方，然后放弃了。结果过两个月就验证了我的想法。如果按照现在思维，肯定是果断从后面开始逆起，或者前面就是纯逆不审，赶紧逆到后面开始审。那段时期还沉迷写文档，是个函数能写二十页pdf，太浪费时间且毫无用处。</p>
+<p>打第四五个目标的时候也是逆审一起来的。但是这两个都是功能性驱动，且功能非常独立。这对逆向和理解的要求不高，于是出了一波洞。再加上会粗浅的变体分析了，收益还行。肯定也算low hanging fruit，是个人都挖得到，对技术的精进作用不大。</p>
+<p>打第六个目标的时候意识到了问题，好像只能挑软柿子捏。当时的改变思路是想走捷径。尝试总结归纳分析过的所有漏洞，找出一种不用理解，光看一些特征就能找出漏洞的bottom-up策略。这么干了一个月，一个洞也没出。其实这是幸运的。幸好这个目标已经久经沙场，不然可能又会陷入错误的觉悟。我的策略本质上还是找low hanging fruit。特征能看出来的东西，自动化也能轻易找到。而且false positive太多，有太多操作需要手动排查最后发现根本不是漏洞。其实如果花时间理解了目标就根本不会觉得这些操作有问题。分析nday的时候也会觉得我操这怎么可能能想得到，但其实人家只是理解了目标而已。这其中当然也收获到了一些排查漏洞的技巧，但更重要的是又该换思路了。</p>
+<p>现在在打第七个目标。已经找出了需要逆的几个结构体，目前在纯逆向阶段。等这一阶段搞完就可以根据功能点进一步理解了。</p>
+<p>反思复盘才会发现，原来失败的任务本质上都是因为没达到成功的条件，只是当时不知道成功的条件是什么。而成功的任务大多数是运气使然。要多利用公开资源学习他人的思路。</p>
 
       
 
@@ -885,11 +893,11 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">prompteng</a>
+                <a href="javascript:void(0)" class="js-tag color5">injection</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">injection</a>
+                <a href="javascript:void(0)" class="js-tag color5">prompteng</a>
               </li>
              
               <li class="article-tag-list-item">
