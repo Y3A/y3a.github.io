@@ -26,7 +26,7 @@
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/tracing_undef.png">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/defined.png">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2024-09-19T11:32:19.593Z">
+<meta property="article:modified_time" content="2024-09-24T14:54:25.583Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -625,6 +625,7 @@
 <p>打第六个目标的时候意识到了问题，好像只能挑软柿子捏。当时的改变思路是想走捷径。尝试总结归纳分析过的所有漏洞，找出一种不用理解，光看一些特征就能找出漏洞的bottom-up策略。这么干了一个月，一个洞也没出。其实这是幸运的。幸好这个目标已经久经沙场，不然可能又会陷入错误的觉悟。我的策略本质上还是找low hanging fruit。特征能看出来的东西，自动化也能轻易找到。而且false positive太多，有太多操作需要手动排查最后发现根本不是漏洞。其实如果花时间理解了目标就根本不会觉得这些操作有问题。分析nday的时候也会觉得我操这怎么可能能想得到，但其实人家只是理解了目标而已。这其中当然也收获到了一些排查漏洞的技巧，但更重要的是又该换思路了。</p>
 <p>现在在打第七个目标。已经找出了需要逆的几个结构体，目前在纯逆向阶段。等这一阶段搞完就可以根据功能点进一步理解了。</p>
 <p>反思复盘才会发现，原来失败的任务本质上都是因为没达到成功的条件，只是当时不知道成功的条件是什么。而成功的任务大多数是运气使然。要多利用公开资源学习他人的思路。</p>
+<h2 id="2024-09-24"><a href="#2024-09-24" class="headerlink" title="2024-09-24"></a>2024-09-24</h2><p>今日的思考是牛逼的人在打高端局的时候是不是一直在主动考虑和分析很多事情。起因是昨天突然想认真玩一个《曾经玩的很牛逼但很几年没认真玩了的》游戏。发现算费也不会算，牌序也记不住。就感觉，要花好多的精神力去特意算这个东西然后还是很容易一片空白。玩得很用力，反而影响操作。但其实回想之前，我也根本没考虑这些事情。我不会主动计费算牌，甚至从来没有主动这么思考过，但还是能很清晰的知道当前状态，亏小还是亏大，对面手里有哪些牌。像是潜意识里一直在自动处理着这些信息，而且毫不费力。当别人问我怎么记的时候我也说不出所以然，因为对自己而言完全就是《凭感觉》。我是感觉牛人打高端局不会比普通人打普通局累多少。因为普通人需要花大量精神力去处理的事情，已经在他们的脑子里形成了专门的处理器，可以被动且不费力的自动分析完。这跟天赋没半毛钱关系，因为我曾经也不会，我有段时间会了，我现在又不会了。绝对是熟练度的问题。到巅峰水平我打了三年，每天平均至少五小时。游戏和安研的难度又怎能相提并论？综合考量之下，目前菜才是合理的。只要不停的肝就完事了。有一天就会发现我好像没比之前费更多力，但产出已不是一个量级的。</p>
 
       
 
@@ -841,15 +842,15 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">cve</a>
+              </li>
+             
+              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">ctf</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">heap</a>
-              </li>
-             
-              <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color4">cve</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -893,11 +894,11 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">injection</a>
+                <a href="javascript:void(0)" class="js-tag color5">prompteng</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">prompteng</a>
+                <a href="javascript:void(0)" class="js-tag color5">injection</a>
               </li>
              
               <li class="article-tag-list-item">
