@@ -26,7 +26,7 @@
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/tracing_undef.png">
 <meta property="og:image" content="http://example.com/2099/11/11/prelude/defined.png">
 <meta property="article:published_time" content="2099-11-11T08:00:00.000Z">
-<meta property="article:modified_time" content="2025-04-24T14:35:20.938Z">
+<meta property="article:modified_time" content="2025-05-30T05:07:59.837Z">
 <meta property="article:author" content="cp">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/2099/11/11/prelude/x.jpeg">
@@ -663,6 +663,14 @@
 <p>First of all I completely gave up on academics to do security. Not having to split my mind is boosting productivity significantly and I’m set into a good work rest routine. I think the best I’ve felt this whole year. Because pwn2own is coming, I did a sprint to find some bugs for pwn2own. Since my bug was patched right before pwn2own last year, I learnt my lesson and prepared more this year. Then went to work on some other cool stuff with my friends. Not sure how I’ll pass the exams in the coming weeks but that’s a problem for another day. That’s the smallest tradeoff for a good month of hacking, both on software and my mind. I experienced shower time inspiration again.</p>
 <p>All of this is possible because I gained back my passion for hacking. In March I was feeling pretty dreadful because I found little joy in hacking. I was held back by my own assumptions that I had to do X Y and Z on the target before I can find bugs, and I don’t like doing those. That’s TOTALLY untrue. You don’t have to do anything to start finding bugs. In fact, don’t care about the bugs. The simple trick is just to have fun and do what feels fun. If <code>cat /dev/urandom &gt; target</code> is what you’re feeling like, just do it! If you don’t feel like setting up a fuzzer, don’t! Don’t feel like exploiting this shitty bug, just find a new one that’s easier to exploit! Quit thinking about trying to maximize value out of everything. So what if you can’t exploit it? So what if you didn’t fully audit this feature? There’s so many many many bugs out there, and theres so many many many attack surfaces out there. Just do what interests you at the current point of time. Passion comes normally when you’re not suppressing fun. And actually that’s one of the plus points of hacking. The journey doesn’t matter as long as you accomplish the objective. There’s an infinite number of possible journeys. So why not pick the one that you feel like doing the most? I’m struggling to find a similar analogy in other fields, probably because I’m not experienced in those. But in hacking, there’s always the privilege to be unrestricted and free.</p>
 <p>I want to do so many things now. I want to learn about browser exploits. I want to do mobile security. Everything is so fun and exciting again, because I don’t give a fuck about if I can do them properly, if I can do them at all, and what happens after I do them.</p>
+<h2 id="2025-05-30"><a href="#2025-05-30" class="headerlink" title="2025-05-30"></a>2025-05-30</h2><p>So I have made the decision to learn browser on the side, and I’ll try to document the steps of learning browser research from zero.</p>
+<hr>
+<p>Week 1:</p>
+<p>First I seek to understand the flow and different components of browsers. The attack surface of a browser is in essence parsing untrusted data from the web, but made extremely complex by the ability to execute a dynamic scripting language called javascript. There are various different components in the browser. For example DOM parsing, interpreting javascript, compiling javascript into machine code, optimizing/deoptimizing the machine code. Seems like most recent bugs are in the JIT optimization stage.</p>
+<p>Now from my kernel experience, I know it’s important to have a smooth and fluent debugging + source code setup. I already have v8 installed. I’ll try to follow through a blogpost on debugging an nday, focusing on the whole experience of debugging and analyzing browser source, and then think of how to improve the workflow.</p>
+<hr>
+<p>Side question: why browsers? Because I can’t understand a single browser bug report and I don’t like that feeling. Of course, browser exploits seem profitable.</p>
+<p>Recently I also have this thought on “hacking” vs “code correctness audit”. They are quite different aren’t they? I’ve been doing the latter all along, and it’s time for a change in mindset.</p>
 
       
 
