@@ -6,14 +6,20 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://example.com">
-  <title>cppblog</title>
+  <title>JS Builtins in the V8 Engine | cppblog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="cppblog">
-<meta property="og:url" content="http://example.com/index.html">
+  <meta name="description" content="How are javascript builtin functions implemented in the engine?">
+<meta property="og:type" content="article">
+<meta property="og:title" content="JS Builtins in the V8 Engine">
+<meta property="og:url" content="http://example.com/2025/12/03/v8-js-builtin/index.html">
 <meta property="og:site_name" content="cppblog">
+<meta property="og:description" content="How are javascript builtin functions implemented in the engine?">
 <meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-12-03T08:00:00.000Z">
+<meta property="article:modified_time" content="2025-12-02T16:28:10.850Z">
 <meta property="article:author" content="cp">
+<meta property="article:tag" content="browser">
+<meta property="article:tag" content="v8">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternative" href="/atom.xml" title="cppblog" type="application/atom+xml">
@@ -142,81 +148,14 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-    <article id="post-prelude" class="article article-type-post  article-index" itemscope itemprop="blogPost">
+            <article id="post-v8-js-builtin" class="article article-type-post " itemscope itemprop="blogPost">
   <div class="article-inner">
     
       <header class="article-header">
         
   
-    <h1 itemprop="name">
-      <a class="article-title" href="/2099/11/11/prelude/">Prelude</a>
-    </h1>
-  
-
-        
-        <a href="/2099/11/11/prelude/" class="archive-article-date">
-  	<time datetime="2099-11-11T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2099-11-11</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Purpose?</p>
-        
-          <a class="article-more-a" href="/2099/11/11/prelude/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2099/11/11/prelude/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-v8-js-builtin" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2025/12/03/v8-js-builtin/">JS Builtins in the V8 Engine</a>
+    <h1 class="article-title" itemprop="name">
+      JS Builtins in the V8 Engine
     </h1>
   
 
@@ -230,9 +169,72 @@
     <div class="article-entry" itemprop="articleBody">
       
         <p>How are javascript builtin functions implemented in the engine?</p>
-        
-          <a class="article-more-a" href="/2025/12/03/v8-js-builtin/#more">more >></a>
-        
+<span id="more"></span>
+
+<h2 id="Background"><a href="#Background" class="headerlink" title="Background"></a>Background</h2><p>Time for a change. This marks the beginning of me learning about browsers!</p>
+<p>The only time I’ve touched browsers before was in 2021 where I just regurgitated someone’s writeup for a linear OOBRW ctf challenge in the v8 engine. That was pretty lame and not real research. I now prefer to just explore like a developer rather than go straight in from the security aspect.</p>
+<p>The first chapter will be exploring JS Builtins in the v8 engine. It’s kind of my first day doing browser research so don’t mind.</p>
+<h2 id="JS-Builtins"><a href="#JS-Builtins" class="headerlink" title="JS Builtins"></a>JS Builtins</h2><p>JS Builtins in v8 are the runtime JS method you can invoke, either as an object method or independent function.</p>
+<p>For the purpose of this discussion, we will focus on the <code>Array.prototype.splice()</code> method as an example.</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> months = [<span class="string">&quot;Jan&quot;</span>, <span class="string">&quot;March&quot;</span>, <span class="string">&quot;April&quot;</span>, <span class="string">&quot;June&quot;</span>];</span><br><span class="line">months.splice(<span class="number">1</span>, <span class="number">0</span>, <span class="string">&quot;Feb&quot;</span>);</span><br><span class="line"><span class="comment">// Inserts at index 1</span></span><br><span class="line"><span class="built_in">console</span>.log(months);</span><br><span class="line"><span class="comment">// Expected output: Array [&quot;Jan&quot;, &quot;Feb&quot;, &quot;March&quot;, &quot;April&quot;, &quot;June&quot;]</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="Torque"><a href="#Torque" class="headerlink" title="Torque"></a>Torque</h2><p><code>Torque</code> is a language created for v8, intended for developers to express features described by the ECMAScript specification, while still allowing low level control over v8 specific optimizations. v8 encourages the use of Torque to implement builtin functions, as a replacement for <code>CodeStubAssembler</code>(CSA).</p>
+<p>Some of the JS Builtin APIs have been re-implemented in Torque, including <code>Array.prototype.splice()</code>.</p>
+<p>The source code can be found in <code>src\builtins\array-splice.tq</code>:</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// https://tc39.github.io/ecma262/#sec-array.prototype.splice</span></span><br><span class="line">transitioning javascript builtin ArrayPrototypeSplice(</span><br><span class="line">    js-implicit context: NativeContext, <span class="attr">receiver</span>: JSAny)(...arguments): JSAny &#123;</span><br><span class="line">  <span class="comment">// 1. Let O be ? ToObject(this value).</span></span><br><span class="line">  <span class="keyword">const</span> o: JSReceiver = ToObject(context, receiver);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 2. Let len be ? ToLength(? Get(O, &quot;length&quot;)).</span></span><br><span class="line">  <span class="keyword">const</span> len: <span class="built_in">Number</span> = GetLengthProperty(o);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 3. Let relativeStart be ? ToInteger(start).</span></span><br><span class="line">  <span class="keyword">const</span> start: JSAny = <span class="built_in">arguments</span>[<span class="number">0</span>];</span><br><span class="line">  <span class="keyword">const</span> relativeStart: <span class="built_in">Number</span> = ToInteger_Inline(start);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 4. If relativeStart &lt; 0, let actualStart be max((len + relativeStart),</span></span><br><span class="line">  <span class="comment">// 0);</span></span><br><span class="line">  <span class="comment">//    else let actualStart be min(relativeStart, len).</span></span><br><span class="line">  <span class="keyword">const</span> actualStart: <span class="built_in">Number</span> = relativeStart &lt; <span class="number">0</span> ?</span><br><span class="line">      Max((len + relativeStart), <span class="number">0</span>) :</span><br><span class="line">      Min(relativeStart, len);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">let</span> insertCount: Smi;</span><br><span class="line">  <span class="keyword">let</span> actualDeleteCount: <span class="built_in">Number</span>;</span><br><span class="line">  <span class="comment">// 5. If the Number of actual arguments is 0, then</span></span><br><span class="line">  <span class="keyword">if</span> (<span class="built_in">arguments</span>.length == <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="comment">// a. Let insertCount be 0.</span></span><br><span class="line">    insertCount = <span class="number">0</span>;</span><br><span class="line">    <span class="comment">// b. Let actualDeleteCount be 0.</span></span><br><span class="line">    actualDeleteCount = <span class="number">0</span>;</span><br><span class="line">    <span class="comment">// 6. Else if the Number of actual arguments is 1, then</span></span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">arguments</span>.length == <span class="number">1</span>) &#123;</span><br><span class="line">    <span class="comment">// a. Let insertCount be 0.</span></span><br><span class="line">    insertCount = <span class="number">0</span>;</span><br><span class="line">    <span class="comment">// b. Let actualDeleteCount be len - actualStart.</span></span><br><span class="line">    actualDeleteCount = len - actualStart;</span><br><span class="line">    <span class="comment">// 7. Else,</span></span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// a. Let insertCount be the Number of actual arguments minus 2.</span></span><br><span class="line">    insertCount = Convert&lt;Smi&gt;(<span class="built_in">arguments</span>.length) - <span class="number">2</span>;</span><br><span class="line">    <span class="comment">// b. Let dc be ? ToInteger(deleteCount).</span></span><br><span class="line">    <span class="keyword">const</span> deleteCount: JSAny = <span class="built_in">arguments</span>[<span class="number">1</span>];</span><br><span class="line">    <span class="keyword">const</span> dc: <span class="built_in">Number</span> = ToInteger_Inline(deleteCount);</span><br><span class="line">    <span class="comment">// c. Let actualDeleteCount be min(max(dc, 0), len - actualStart).</span></span><br><span class="line">    actualDeleteCount = Min(Max(dc, <span class="number">0</span>), len - actualStart);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 8. If len + insertCount - actualDeleteCount &gt; 2^53-1, throw a</span></span><br><span class="line">  <span class="comment">//    Bailout exception.</span></span><br><span class="line">  <span class="keyword">const</span> newLength: <span class="built_in">Number</span> = len + insertCount - actualDeleteCount;</span><br><span class="line">  <span class="keyword">if</span> (newLength &gt; kMaxSafeInteger) &#123;</span><br><span class="line">    ThrowTypeError(MessageTemplate::kInvalidArrayLength, newLength);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> FastArraySplice(</span><br><span class="line">        context, <span class="built_in">arguments</span>, o, len, actualStart, insertCount, actualDeleteCount)</span><br><span class="line">        otherwise Bailout;</span><br><span class="line">  &#125; label Bailout &#123;&#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// If the fast case fails, just continue with the slow, correct,</span></span><br><span class="line">  <span class="comment">// spec-compliant case.</span></span><br><span class="line">  <span class="keyword">return</span> SlowSplice(</span><br><span class="line">      context, <span class="built_in">arguments</span>, o, len, actualStart, insertCount, actualDeleteCount);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Torque is compiled by the torque compiler(at build time) into C++ code.</p>
+<p>For <code>Array.prototype.splice()</code>, it is compiled into <code>gen\torque-generated\src\builtins\array-splice-tq-csa.cc</code>:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br><span class="line">TF_BUILTIN(ArrayPrototypeSplice, CodeStubAssembler) &#123;</span><br><span class="line">  compiler::CodeAssemblerState* state_ = state();  <span class="function">compiler::CodeAssembler <span class="title">ca_</span><span class="params">(state())</span></span>;</span><br><span class="line">  TNode&lt;Word32T&gt; argc = UncheckedParameter&lt;Word32T&gt;(Descriptor::kJSActualArgumentsCount);</span><br><span class="line">  <span class="function">TNode&lt;IntPtrT&gt; <span class="title">arguments_length</span><span class="params">(ChangeInt32ToIntPtr(UncheckedCast&lt;Int32T&gt;(argc)))</span></span>;</span><br><span class="line">  TNode&lt;RawPtrT&gt; arguments_frame = UncheckedCast&lt;RawPtrT&gt;(LoadFramePointer());</span><br><span class="line">  <span class="function">TorqueStructArguments <span class="title">torque_arguments</span><span class="params">(GetFrameArguments(arguments_frame, arguments_length, FrameArgumentsArgcType::kCountIncludesReceiver))</span></span>;</span><br><span class="line">  <span class="function">CodeStubArguments <span class="title">arguments</span><span class="params">(<span class="keyword">this</span>, torque_arguments)</span></span>;</span><br><span class="line">  TNode&lt;NativeContext&gt; parameter0 = UncheckedParameter&lt;NativeContext&gt;(Descriptor::kContext);</span><br><span class="line">  USE(parameter0);</span><br><span class="line">  TNode&lt;JSAny&gt; parameter1 = arguments.GetReceiver();</span><br><span class="line">  USE(parameter1);</span><br><span class="line">  compiler::CodeAssemblerParameterizedLabel&lt;&gt; block0(&amp;ca_, compiler::CodeAssemblerLabel::kNonDeferred);</span><br><span class="line">  compiler::CodeAssemblerParameterizedLabel&lt;&gt; block1(&amp;ca_, compiler::CodeAssemblerLabel::kNonDeferred);</span><br><span class="line">  compiler::CodeAssemblerParameterizedLabel&lt;&gt; block2(&amp;ca_, compiler::CodeAssemblerLabel::kNonDeferred);</span><br><span class="line">  <span class="function">compiler::CodeAssemblerParameterizedLabel&lt;Number&gt; <span class="title">block3</span><span class="params">(&amp;ca_, compiler::CodeAssemblerLabel::kNonDeferred)</span></span>;</span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>This is actually expressed using the CSA macros.</p>
+<h2 id="CodeStubAssembler"><a href="#CodeStubAssembler" class="headerlink" title="CodeStubAssembler"></a>CodeStubAssembler</h2><p>CSA is a set of macros aimed to describe control flow using <code>TurboFan</code>‘s graph format. It was the preferred way to write builtins, until Torque came out, where it was no longer necessary to write CSA manually since Torque will generate it.</p>
+<p>In this generated CSA code:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">compiler::CodeAssemblerState* state_ = state();</span><br></pre></td></tr></table></figure>
+<p>We can see that each CSA function has an internal state that keeps track of how to describe the function in TurboFan graph format.</p>
+<p>The TurboFan graph format is TurboFan’s IL, that can be easily compiled into machine code.</p>
+<p>The <code>TF_BUILTIN()</code> macro expands to:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ----------------------------------------------------------------------------</span></span><br><span class="line"><span class="comment">// Support macro for defining builtins with Turbofan.</span></span><br><span class="line"><span class="comment">// ----------------------------------------------------------------------------</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// A builtin function is defined by writing:</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">//   TF_BUILTIN(name, code_assember_base_class) &#123;</span></span><br><span class="line"><span class="comment">//     ...</span></span><br><span class="line"><span class="comment">//   &#125;</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// In the body of the builtin function the arguments can be accessed</span></span><br><span class="line"><span class="comment">// as &quot;Parameter(n)&quot;.</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> TF_BUILTIN(Name, AssemblerBase)                                     \</span></span><br><span class="line">  <span class="class"><span class="keyword">class</span> <span class="title">Name</span>##<span class="title">Assembler</span> :</span> <span class="keyword">public</span> AssemblerBase &#123;                            \</span><br><span class="line">   <span class="keyword">public</span>:                                                                  \</span><br><span class="line">    <span class="keyword">using</span> Descriptor = Builtin_##Name##_InterfaceDescriptor;                \</span><br><span class="line">                                                                            \</span><br><span class="line">    <span class="keyword">explicit</span> Name##Assembler(compiler::CodeAssemblerState* state)           \</span><br><span class="line">        : AssemblerBase(state) &#123;&#125;                                           \</span><br><span class="line">    <span class="keyword">void</span> Generate##Name##Impl();                                            \</span><br><span class="line">                                                                            \</span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="class"><span class="keyword">class</span> <span class="title">T</span>&gt;</span>                                                      \</span><br><span class="line">    <span class="function">TNode&lt;T&gt; <span class="title">Parameter</span><span class="params">(                                                     \</span></span></span><br><span class="line"><span class="function"><span class="params">        Descriptor::ParameterIndices index,                                 \</span></span></span><br><span class="line"><span class="function"><span class="params">        cppgc::SourceLocation loc = cppgc::SourceLocation::Current())</span> </span>&#123;     \</span><br><span class="line">      <span class="keyword">return</span> CodeAssembler::Parameter&lt;T&gt;(<span class="keyword">static_cast</span>&lt;<span class="keyword">int</span>&gt;(index), loc);     \</span><br><span class="line">    &#125;                                                                       \</span><br><span class="line">                                                                            \</span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="class"><span class="keyword">class</span> <span class="title">T</span>&gt;</span>                                                      \</span><br><span class="line">    <span class="function">TNode&lt;T&gt; <span class="title">UncheckedParameter</span><span class="params">(Descriptor::ParameterIndices index)</span> </span>&#123;       \</span><br><span class="line">      <span class="keyword">return</span> CodeAssembler::UncheckedParameter&lt;T&gt;(<span class="keyword">static_cast</span>&lt;<span class="keyword">int</span>&gt;(index)); \</span><br><span class="line">    &#125;                                                                       \</span><br><span class="line">  &#125;;                                                                        \</span><br><span class="line">  <span class="keyword">void</span> Builtins::Generate_##Name(compiler::CodeAssemblerState* state) &#123;     \</span><br><span class="line">    Name##<span class="function">Assembler <span class="title">assembler</span><span class="params">(state)</span></span>;                                       \</span><br><span class="line">    state-&gt;SetInitialDebugInformation(#Name, __FILE__, __LINE__);           \</span><br><span class="line">    <span class="keyword">if</span> (Builtins::KindOf(Builtin::k##Name) == Builtins::TFJ) &#123;              \</span><br><span class="line">      assembler.PerformStackCheck(assembler.GetJSContextParameter());       \</span><br><span class="line">    &#125;                                                                       \</span><br><span class="line">    assembler.Generate##Name##Impl();                                       \</span><br><span class="line">  &#125;                                                                         \</span><br><span class="line">  <span class="keyword">void</span> Name##Assembler::Generate##Name##Impl()</span><br></pre></td></tr></table></figure>
+<p>The important part is:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span> Builtins::Generate_##Name(compiler::CodeAssemblerState* state) &#123;     \</span><br><span class="line">    Name##<span class="function">Assembler <span class="title">assembler</span><span class="params">(state)</span></span>;                                       \</span><br><span class="line">    state-&gt;SetInitialDebugInformation(#Name, __FILE__, __LINE__);           \</span><br><span class="line">    <span class="keyword">if</span> (Builtins::KindOf(Builtin::k##Name) == Builtins::TFJ) &#123;              \</span><br><span class="line">      assembler.PerformStackCheck(assembler.GetJSContextParameter());       \</span><br><span class="line">    &#125;                                                                       \</span><br><span class="line">    assembler.Generate##Name##Impl();                                       \</span><br><span class="line">  &#125;                                                                         \</span><br></pre></td></tr></table></figure>
+<p>This defines a function in the namespace <code>v8::internal::Builtins</code>.</p>
+<p>In our example it would be:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">Builtins::Generate_ArrayPrototypeSplice</span><span class="params">(compiler::CodeAssemblerState* state)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Checkpoint"><a href="#Checkpoint" class="headerlink" title="Checkpoint"></a>Checkpoint</h2><p>At this stage, we have described an implementation of <code>Array.prototype.splice()</code> in Torque, which will be compiled into C++ code that uses the CSA macros.</p>
+<p>The C++ code globally defines a generator, that is capable of building a TurboFan graph that describes our implementation.</p>
+<p>At this stage, we can invoke TurboFan on demand with the generator to get the resulting machine code of <code>Array.prototype.splice()</code>.</p>
+<h2 id="Emit-Machine-Code"><a href="#Emit-Machine-Code" class="headerlink" title="Emit Machine Code"></a>Emit Machine Code</h2><p>The part that converts all the CSA expressions into machine code is <code>SetupIsolateDelegate::SetupBuiltinsInternal()</code> in <code>src\builtins\setup-builtins-internal.cc</code>:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// static</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">SetupIsolateDelegate::SetupBuiltinsInternal</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">    Isolate* isolate, <span class="keyword">bool</span> compute_builtins_effects)</span> </span>&#123;</span><br><span class="line">  Builtins* builtins = isolate-&gt;builtins();</span><br><span class="line">  DCHECK(!builtins-&gt;initialized_);</span><br><span class="line"></span><br><span class="line">  BuiltinsEffectsAnalyzer* builtins_effects_analyzer = <span class="literal">nullptr</span>;</span><br><span class="line">  <span class="keyword">if</span> (compute_builtins_effects) &#123;</span><br><span class="line">    builtins_effects_analyzer = BuiltinsEffectsAnalyzer::Setup(isolate);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (v8_flags.dump_builtins_hashes_to_file) &#123;</span><br><span class="line">    <span class="comment">// Create an empty file.</span></span><br><span class="line">    <span class="built_in">std</span>::ofstream(v8_flags.dump_builtins_hashes_to_file, <span class="built_in">std</span>::ios_base::trunc);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  PopulateWithPlaceholders(isolate);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Create a scope for the handles in the builtins.</span></span><br><span class="line">  <span class="function">HandleScope <span class="title">scope</span><span class="params">(isolate)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Generated builtins are temporarily stored in this array to avoid data races</span></span><br><span class="line">  <span class="comment">// on the isolate&#x27;s builtin table.</span></span><br><span class="line">  <span class="built_in">std</span>::<span class="built_in">array</span>&lt;Handle&lt;Code&gt;, Builtins::kBuiltinCount&gt; generated_builtins;</span><br><span class="line">  <span class="keyword">auto</span> install_generated_builtin = [&amp;generated_builtins, isolate](</span><br><span class="line">                                       Builtin builtin, Handle&lt;Code&gt; code) &#123;</span><br><span class="line">    DCHECK_EQ(ThreadId::Current(), isolate-&gt;thread_id());</span><br><span class="line">    USE(isolate);</span><br><span class="line">    generated_builtins[Builtins::ToInt(builtin)] = code;</span><br><span class="line">  &#125;;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">int</span> builtins_built_without_job_count = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">int</span> job_creation_order = <span class="number">0</span>;</span><br><span class="line">  BuiltinCompilationScheduler scheduler;</span><br><span class="line">  Tagged&lt;Code&gt; code;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_CPP_WITHOUT_JOB(Name, Argc)                    \</span></span><br><span class="line">  code = BuildAdaptor(isolate, Builtin::k##Name,             \</span><br><span class="line">                      FUNCTION_ADDR(Builtin_##Name), #Name); \</span><br><span class="line">  generated_builtins[Builtins::ToInt(Builtin::k##Name)] =    \</span><br><span class="line">      handle(code, isolate);                                 \</span><br><span class="line">  builtins_built_without_job_count++;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_TFJ_TSA_WITHOUT_JOB(Name, Argc, ...)                         \</span></span><br><span class="line">  code = BuildWithTurboshaftAssemblerJS(                                   \</span><br><span class="line">      isolate, Builtin::k##Name, &amp;Builtins::Generate_##Name, Argc, #Name); \</span><br><span class="line">  generated_builtins[Builtins::ToInt(Builtin::k##Name)] =                  \</span><br><span class="line">      handle(code, isolate);                                               \</span><br><span class="line">  builtins_built_without_job_count++;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_TFJ_WITH_JOB(Name, Argc, ...)                               \</span></span><br><span class="line">  CompileJSLinkageCodeStubBuiltin(isolate, Builtin::k##Name,              \</span><br><span class="line">                                  &amp;Builtins::Generate_##Name,             \</span><br><span class="line">                                  install_generated_builtin, Argc, #Name, \</span><br><span class="line">                                  job_creation_order++, scheduler);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_TFC_TSA_WITHOUT_JOB(Name, InterfaceDescriptor)      \</span></span><br><span class="line">  <span class="comment">/* Return size is from the provided CallInterfaceDescriptor. */</span> \</span><br><span class="line">  code = BuildWithTurboshaftAssemblerCS(                          \</span><br><span class="line">      isolate, Builtin::k##Name, &amp;Builtins::Generate_##Name,      \</span><br><span class="line">      CallDescriptors::InterfaceDescriptor, #Name);               \</span><br><span class="line">  generated_builtins[Builtins::ToInt(Builtin::k##Name)] =         \</span><br><span class="line">      handle(code, isolate);                                      \</span><br><span class="line">  builtins_built_without_job_count++;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_TFC_WITH_JOB(Name, InterfaceDescriptor)                         \</span></span><br><span class="line">  <span class="comment">/* Return size is from the provided CallInterfaceDescriptor. */</span>             \</span><br><span class="line">  CompileCSLinkageCodeStubBuiltin(                                            \</span><br><span class="line">      isolate, Builtin::k##Name, &amp;Builtins::Generate_##Name,                  \</span><br><span class="line">      install_generated_builtin, CallDescriptors::InterfaceDescriptor, #Name, \</span><br><span class="line">      job_creation_order++, scheduler);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_TFS_WITH_JOB(Name, ...)                                   \</span></span><br><span class="line">  <span class="comment">/* Return size for generic TF builtins (stub linkage) is always 1. */</span> \</span><br><span class="line">  CompileCSLinkageCodeStubBuiltin(                                      \</span><br><span class="line">      isolate, Builtin::k##Name, &amp;Builtins::Generate_##Name,            \</span><br><span class="line">      install_generated_builtin, CallDescriptors::Name, #Name,          \</span><br><span class="line">      job_creation_order++, scheduler);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_TFH_WITH_JOB(Name, InterfaceDescriptor)                         \</span></span><br><span class="line">  <span class="comment">/* Return size for IC builtins/handlers is always 1. */</span>                     \</span><br><span class="line">  CompileCSLinkageCodeStubBuiltin(                                            \</span><br><span class="line">      isolate, Builtin::k##Name, &amp;Builtins::Generate_##Name,                  \</span><br><span class="line">      install_generated_builtin, CallDescriptors::InterfaceDescriptor, #Name, \</span><br><span class="line">      job_creation_order++, scheduler);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_BCH_WITH_JOB(Name, OperandScale, Bytecode)                    \</span></span><br><span class="line">  CompileBytecodeHandler(isolate, Builtin::k##Name, OperandScale, Bytecode, \</span><br><span class="line">                         install_generated_builtin, job_creation_order++,   \</span><br><span class="line">                         scheduler);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_BCH_TSA_WITH_JOB(Name, OperandScale, Bytecode)                   \</span></span><br><span class="line">  CompileBytecodeHandlerTSA(isolate, Builtin::k##Name, OperandScale, Bytecode, \</span><br><span class="line">                            install_generated_builtin, job_creation_order++,   \</span><br><span class="line">                            scheduler);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_ASM_WITHOUT_JOB(Name, InterfaceDescriptor)            \</span></span><br><span class="line">  code = BuildWithMacroAssembler(isolate, Builtin::k##Name,         \</span><br><span class="line">                                 Builtins::Generate_##Name, #Name); \</span><br><span class="line">  generated_builtins[Builtins::ToInt(Builtin::k##Name)] =           \</span><br><span class="line">      handle(code, isolate);                                        \</span><br><span class="line">  builtins_built_without_job_count++;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> NOP(...)</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// Build all builtins without jobs first. When concurrent builtin generation</span></span><br><span class="line">  <span class="comment">// is enabled, allocations needs to be deterministic. Having main-thread</span></span><br><span class="line">  <span class="comment">// generated builtins in the middle of the list breaks determinism.</span></span><br><span class="line">  BUILTIN_LIST(BUILD_CPP_WITHOUT_JOB, BUILD_TFJ_TSA_WITHOUT_JOB, NOP,</span><br><span class="line">               BUILD_TFC_TSA_WITHOUT_JOB, NOP, NOP, NOP, NOP, NOP,</span><br><span class="line">               BUILD_ASM_WITHOUT_JOB);</span><br><span class="line">  BUILTIN_LIST(NOP, NOP, BUILD_TFJ_WITH_JOB, NOP, BUILD_TFC_WITH_JOB,</span><br><span class="line">               BUILD_TFS_WITH_JOB, BUILD_TFH_WITH_JOB, BUILD_BCH_TSA_WITH_JOB,</span><br><span class="line">               BUILD_BCH_WITH_JOB, NOP)</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_CPP_WITHOUT_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_TFJ_TSA_WITHOUT_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_TFJ_WITH_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_TFC_TSA_WITHOUT_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_TFC_WITH_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_TFS_WITH_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_TFH_WITH_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_BCH_TSA_WITH_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_BCH_WITH_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> BUILD_ASM_WITHOUT_JOB</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">undef</span> NOP</span></span><br><span class="line"></span><br><span class="line">  scheduler.AwaitAndFinalizeCurrentBatch(isolate);</span><br><span class="line">  CHECK_EQ(Builtins::kBuiltinCount, builtins_built_without_job_count +</span><br><span class="line">                                        scheduler.builtins_installed_count());</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (compute_builtins_effects) &#123;</span><br><span class="line">    DCHECK_NOT_NULL(builtins_effects_analyzer);</span><br><span class="line">    builtins_effects_analyzer-&gt;Finalize();</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Add the generated builtins to the isolate.</span></span><br><span class="line">  <span class="keyword">for</span> (Builtin builtin = Builtins::kFirst; builtin &lt;= Builtins::kLast;</span><br><span class="line">       ++builtin) &#123;</span><br><span class="line">    AddBuiltin(builtins, builtin,</span><br><span class="line">               *generated_builtins[Builtins::ToInt(builtin)]);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  ReplacePlaceholders(isolate);</span><br><span class="line"></span><br><span class="line">  builtins-&gt;MarkInitialized();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>This function first defines many macros to generate machine code from CSA.</p>
+<p>The one related to us is:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILD_TFJ_WITH_JOB(Name, Argc, ...)                               \</span></span><br><span class="line">  CompileJSLinkageCodeStubBuiltin(isolate, Builtin::k##Name,              \</span><br><span class="line">                                  &amp;Builtins::Generate_##Name,             \</span><br><span class="line">                                  install_generated_builtin, Argc, #Name, \</span><br><span class="line">                                  job_creation_order++, scheduler);</span><br></pre></td></tr></table></figure>
+
+<p><code>CompileJSLinkageCodeStubBuiltin()</code> eventually calls into <code>CodeAssemblerTurboshaftCompilationJob::ExecuteJobImpl()</code>:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">PipelineCompilationJob::Status</span><br><span class="line">CodeAssemblerTurboshaftCompilationJob::ExecuteJobImpl(</span><br><span class="line">    RuntimeCallStats* stats, LocalIsolate* local_isolate) &#123;</span><br><span class="line">  <span class="keyword">if</span> (!pipeline_-&gt;pipeline.ComputeScheduledGraph()) <span class="keyword">return</span> FAILED;</span><br><span class="line">  DCHECK_NULL(pipeline_-&gt;data.frame());</span><br><span class="line">  DCHECK_NOT_NULL(pipeline_-&gt;data.schedule());</span><br><span class="line"></span><br><span class="line">  CallDescriptor* call_descriptor = raw_assembler()-&gt;call_descriptor();</span><br><span class="line">  <span class="function">Linkage <span class="title">linkage</span><span class="params">(call_descriptor)</span></span>;</span><br><span class="line">  <span class="function">turboshaft::BuiltinPipeline <span class="title">turboshaft_pipeline</span><span class="params">(&amp;turboshaft_data_.value(),</span></span></span><br><span class="line"><span class="function"><span class="params">                                                  &amp;linkage)</span></span>;</span><br><span class="line"></span><br><span class="line">  CHECK(</span><br><span class="line">      turboshaft_pipeline.CreateGraphFromTurbofan(&amp;pipeline_-&gt;data, &amp;linkage));</span><br><span class="line"></span><br><span class="line">  turboshaft_pipeline.OptimizeBuiltin();</span><br><span class="line"></span><br><span class="line">  CHECK_NULL(pipeline_-&gt;data.osr_helper_ptr());</span><br><span class="line">  CHECK(turboshaft_pipeline.GenerateCode(</span><br><span class="line">      &amp;linkage, pipeline_-&gt;data.osr_helper_ptr(), jump_opt_.get(),</span><br><span class="line">      profile_data_, initial_graph_hash_));</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> SUCCEEDED;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Where <code>turboshaft_pipeline.GenerateCode()</code> is used to compile the TurboFan graph into machine code.</p>
+<p>But how is this macro invoked?</p>
+<p>It is invoked by this other macro <code>BUILTIN_LIST()</code>:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Build all builtins without jobs first. When concurrent builtin generation</span></span><br><span class="line"><span class="comment">// is enabled, allocations needs to be deterministic. Having main-thread</span></span><br><span class="line"><span class="comment">// generated builtins in the middle of the list breaks determinism.</span></span><br><span class="line">BUILTIN_LIST(BUILD_CPP_WITHOUT_JOB, BUILD_TFJ_TSA_WITHOUT_JOB, NOP,</span><br><span class="line">             BUILD_TFC_TSA_WITHOUT_JOB, NOP, NOP, NOP, NOP, NOP,</span><br><span class="line">             BUILD_ASM_WITHOUT_JOB);</span><br><span class="line">BUILTIN_LIST(NOP, NOP, BUILD_TFJ_WITH_JOB, NOP, BUILD_TFC_WITH_JOB,</span><br><span class="line">             BUILD_TFS_WITH_JOB, BUILD_TFH_WITH_JOB, BUILD_BCH_TSA_WITH_JOB,</span><br><span class="line">             BUILD_BCH_WITH_JOB, NOP)</span><br></pre></td></tr></table></figure>
+<p>This macro takes in arguments of macros to call(that we just defined) and organizes them:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILTIN_LIST(CPP, TFJ_TSA, TFJ, TFC_TSA, TFC, TFS, TFH, BCH_TSA, BCH, \</span></span><br><span class="line">                     ASM)                                                     \</span><br><span class="line">  BUILTIN_LIST_BASE(CPP, TFJ_TSA, TFJ, TFC_TSA, TFC, TFS, TFH, ASM)           \</span><br><span class="line">  BUILTIN_LIST_FROM_TORQUE(CPP, TFJ, TFC, TFS, TFH, ASM)                      \</span><br><span class="line">  BUILTIN_LIST_INTL(CPP, TFJ, TFS)                                            \</span><br><span class="line">  BUILTIN_LIST_TEMPORAL(CPP, TFJ)                                             \</span><br><span class="line">  BUILTIN_LIST_BYTECODE_HANDLERS(BCH_TSA, BCH)</span><br></pre></td></tr></table></figure>
+<p>And in <code>BUILTIN_LIST_FROM_TORQUE()</code> we see our CSA generator listed:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> BUILTIN_LIST_FROM_TORQUE(CPP, TFJ, TFC, TFS, TFH, ASM) \</span></span><br><span class="line">TFJ(AggregateErrorConstructor, kDontAdaptArgumentsSentinel) \</span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br><span class="line">TFJ(ArrayPrototypeSplice, kDontAdaptArgumentsSentinel) \</span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>These definitions are automatically generated by the Torque compiler.</p>
+<p>The chain of macros will take the name <code>ArrayPrototypeSplice</code> and construct the generator function name <code>Generate_ArrayPrototypeSplice()</code>, call it to generate the TurboFan graph, and finally compile to machine code from there.</p>
+<h2 id="Bind-to-JS"><a href="#Bind-to-JS" class="headerlink" title="Bind to JS"></a>Bind to JS</h2><p>After compilation, the compilation job calls the installer callback to handle the generated <code>Code</code> object, which points to  the emitted machine code.</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Generated builtins are temporarily stored in this array to avoid data races</span></span><br><span class="line"><span class="comment">// on the isolate&#x27;s builtin table.</span></span><br><span class="line"><span class="built_in">std</span>::<span class="built_in">array</span>&lt;Handle&lt;Code&gt;, Builtins::kBuiltinCount&gt; generated_builtins;</span><br><span class="line"><span class="keyword">auto</span> install_generated_builtin = [&amp;generated_builtins, isolate](</span><br><span class="line">                                     Builtin builtin, Handle&lt;Code&gt; code) &#123;</span><br><span class="line">  DCHECK_EQ(ThreadId::Current(), isolate-&gt;thread_id());</span><br><span class="line">  USE(isolate);</span><br><span class="line">  generated_builtins[Builtins::ToInt(builtin)] = code;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>v8 first stores it in a temporary array.</p>
+<p>Finally after all every function is compiled, these code objects will be bound to their individual global constants.</p>
+<p>In our case, we are bound to the constant <code>Builtin::kArrayPrototypeSplice</code>:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Add the generated builtins to the isolate.</span></span><br><span class="line"><span class="keyword">for</span> (Builtin builtin = Builtins::kFirst; builtin &lt;= Builtins::kLast;</span><br><span class="line">     ++builtin) &#123;</span><br><span class="line">  AddBuiltin(builtins, builtin,</span><br><span class="line">             *generated_builtins[Builtins::ToInt(builtin)]);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Now in <code>Genesis::InitializeGlobal()</code> in <code>src\init\bootstrapper.cc</code>:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Set up %ArrayPrototype%.</span></span><br><span class="line"><span class="comment">// The %ArrayPrototype% has TERMINAL_FAST_ELEMENTS_KIND in order to ensure</span></span><br><span class="line"><span class="comment">// that constant functions stay constant after turning prototype to setup</span></span><br><span class="line"><span class="comment">// mode and back.</span></span><br><span class="line">DirectHandle&lt;JSArray&gt; proto = factory-&gt;NewJSArray(</span><br><span class="line">    <span class="number">0</span>, TERMINAL_FAST_ELEMENTS_KIND, AllocationType::kOld);</span><br><span class="line">JSFunction::SetPrototype(isolate_, array_function, proto);</span><br><span class="line">native_context()-&gt;set_initial_array_prototype(*proto);</span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br><span class="line">SimpleInstallFunction(isolate_, proto, <span class="string">&quot;splice&quot;</span>,</span><br><span class="line">                      Builtin::kArrayPrototypeSplice, <span class="number">2</span>, kDontAdapt);</span><br></pre></td></tr></table></figure>
+<p>The base array prototype is initialized, and the <code>splice()</code> function we just compiled is added as a method using <code>SimpleInstallFunction()</code>.</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Handle&lt;JSFunction&gt; <span class="title">SimpleInstallFunction</span><span class="params">(Isolate* isolate,</span></span></span><br><span class="line"><span class="function"><span class="params">                                         DirectHandle&lt;JSObject&gt; base,</span></span></span><br><span class="line"><span class="function"><span class="params">                                         <span class="keyword">const</span> <span class="keyword">char</span>* name, Builtin call,</span></span></span><br><span class="line"><span class="function"><span class="params">                                         <span class="keyword">int</span> len, AdaptArguments adapt,</span></span></span><br><span class="line"><span class="function"><span class="params">                                         PropertyAttributes attrs)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// Although function name does not have to be internalized the property name</span></span><br><span class="line">  <span class="comment">// will be internalized during property addition anyway, so do it here now.</span></span><br><span class="line">  DirectHandle&lt;String&gt; internalized_name =</span><br><span class="line">      isolate-&gt;factory()-&gt;InternalizeUtf8String(name);</span><br><span class="line">  Handle&lt;JSFunction&gt; fun =</span><br><span class="line">      SimpleCreateFunction(isolate, internalized_name, call, len, adapt);</span><br><span class="line">  JSObject::AddProperty(isolate, base, internalized_name, fun, attrs);</span><br><span class="line">  <span class="keyword">return</span> fun;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>This function creates a <code>JSFunction</code> object, and set its code pointer to the actual machine code.</p>
+<p>At this point, we have successfully bound the builtin function <code>Array.prototype.splice()</code> and exposed it to javascript callers.</p>
+<p>Cool!</p>
+
       
 
       
@@ -258,16 +260,84 @@
       
 
       
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2025/12/03/v8-js-builtin/">Full Article >></a>
-        </p>
-      
 
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
+        </div>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://example.com/2025/12/03/v8-js-builtin/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
       
       <div class="clearfix"></div>
     </div>
   </div>
 </article>
+
+  
+<nav id="article-nav">
+  
+    <a href="/2099/11/11/prelude/" id="article-nav-newer" class="article-nav-link-wrap">
+      <i class="icon-circle-left"></i>
+      <div class="article-nav-title">
+        
+          Prelude
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2025/03/25/cve-2024-26170/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">CVE-2024-26170</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
 
 <aside class="wrap-side-operation">
     <div class="mod-side-operation">
@@ -287,660 +357,14 @@
 
 
 
-
-  
-    <article id="post-cve-2024-26170" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2025/03/25/cve-2024-26170/">CVE-2024-26170</a>
-    </h1>
-  
-
-        
-        <a href="/2025/03/25/cve-2024-26170/" class="archive-article-date">
-  	<time datetime="2025-03-25T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2025-03-25</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Windows Composite Image File System (CimFS) Elevation of Privilege Vulnerability</p>
-        
-          <a class="article-more-a" href="/2025/03/25/cve-2024-26170/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">cve</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2025/03/25/cve-2024-26170/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-cve-2024-43626" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2025/02/21/cve-2024-43626/">CVE-2024-43626</a>
-    </h1>
-  
-
-        
-        <a href="/2025/02/21/cve-2024-43626/" class="archive-article-date">
-  	<time datetime="2025-02-21T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2025-02-21</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Windows Telephony Service Elevation of Privilege Vulnerability</p>
-        
-          <a class="article-more-a" href="/2025/02/21/cve-2024-43626/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">cve</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2025/02/21/cve-2024-43626/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-fuzzing6" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2023/12/22/fuzzing6/">Fuzzing 6</a>
-    </h1>
-  
-
-        
-        <a href="/2023/12/22/fuzzing6/" class="archive-article-date">
-  	<time datetime="2023-12-22T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-12-22</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Writing a static binary instrumentation engine</p>
-        
-          <a class="article-more-a" href="/2023/12/22/fuzzing6/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2023/12/22/fuzzing6/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-cve-2021-31969" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2023/11/24/cve-2021-31969/">CVE-2021-31969 Analysis</a>
-    </h1>
-  
-
-        
-        <a href="/2023/11/24/cve-2021-31969/" class="archive-article-date">
-  	<time datetime="2023-11-24T08:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-11-24</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Exploitation of a kernel pool overflow from a restrictive chunk size</p>
-        
-          <a class="article-more-a" href="/2023/11/24/cve-2021-31969/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">cve</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2023/11/24/cve-2021-31969/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-fuzzing5" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2023/09/23/fuzzing5/">Fuzzing 5</a>
-    </h1>
-  
-
-        
-        <a href="/2023/09/23/fuzzing5/" class="archive-article-date">
-  	<time datetime="2023-09-23T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-09-23</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Code review of the Jackalope fuzzer</p>
-        
-          <a class="article-more-a" href="/2023/09/23/fuzzing5/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">fuzzing</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">reads</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2023/09/23/fuzzing5/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-cve-2023-35359" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2023/08/24/cve-2023-35359/">CVE-2023-35359 analysis</a>
-    </h1>
-  
-
-        
-        <a href="/2023/08/24/cve-2023-35359/" class="archive-article-date">
-  	<time datetime="2023-08-24T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-08-24</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Tale of my first cve</p>
-        
-          <a class="article-more-a" href="/2023/08/24/cve-2023-35359/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">cve</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2023/08/24/cve-2023-35359/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-alpc-workings" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2023/07/25/alpc-workings/">ALPC Workings</a>
-    </h1>
-  
-
-        
-        <a href="/2023/07/25/alpc-workings/" class="archive-article-date">
-  	<time datetime="2023-07-25T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-07-25</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>A look into the undocumented IPC mechanism.</p>
-        
-          <a class="article-more-a" href="/2023/07/25/alpc-workings/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">kernel</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2023/07/25/alpc-workings/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-filesystem-logic-bugs" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2023/07/06/filesystem-logic-bugs/">Filesystem Logic Bugs</a>
-    </h1>
-  
-
-        
-        <a href="/2023/07/06/filesystem-logic-bugs/" class="archive-article-date">
-  	<time datetime="2023-07-06T07:00:00.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2023-07-06</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>ez 0dayz?</p>
-        
-          <a class="article-more-a" href="/2023/07/06/filesystem-logic-bugs/#more">more >></a>
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">windows</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2023/07/06/filesystem-logic-bugs/">Full Article >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
   
   
-    <nav id="page-nav">
-      <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="page-number" href="/page/3/">3</a><a class="page-number" href="/page/4/">4</a><a class="extend next" rel="next" href="/page/2/">Next &amp;raquo;</a>
-    </nav>
+  
+
+  
+
+  
+
   
 
 
@@ -963,8 +387,8 @@
     <script>
 	var yiliaConfig = {
 		mathjax: false,
-		isHome: true,
-		isPost: false,
+		isHome: false,
+		isPost: true,
 		isArchive: false,
 		isTag: false,
 		isCategory: false,
